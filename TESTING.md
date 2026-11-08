@@ -22,4 +22,21 @@ Dijalankan otomatis: `cd backend && python -m pytest tests/ -q -n 0` → **37 lu
 | 16 | Unggah media (gambar valid diterima, non-gambar ditolak); foto galeri hanya tampil bila tampil + izin + plat disamarkan | Lulus |
 | 17 | UI: kasir → nota modal; nota baru → tambah paket → Selesai; formulir pesanan (opsi COD hanya provinsi Jawa); cetak 80 mm & A4; Kirim via WhatsApp membuka wa.me; laporan & unduh CSV; tampilan ponsel | Lulus |
 
-Data uji yang dibuat selama pengujian sudah dihapus. Yang tersisa di lingkungan preview: akun owner, akun uji admin/kasir, dan barang/paket berawalan `[TEST]` dari `seed_demo.py`.
+Data uji yang dibuat selama pengujian sudah dihapus.
+
+## Pembaruan sebelum deploy VPS (2026-11-08)
+
+Suite backend: `python -m pytest tests/ -q -n 0` → **60 lulus / 60** (diuji ulang oleh agen penguji independen, iterasi 3–5).
+
+| # | Skenario | Hasil |
+|---|---|---|
+| 18 | Prabayar, stok kurang saat pelunasan → 409, pembayaran TIDAK tercatat, stok tetap, tidak bisa dikirim; setelah stok ditambah, pelunasan berhasil & stok terpotong sekali | Lulus |
+| 19 | Prabayar dengan DP, unit terakhir terjual di kasir, pelunasan → 409, dibayar tetap DP, tidak bisa dikirim | Lulus |
+| 20 | Permintaan pelunasan diulang (idem_key sama) dan 4–6 permintaan serentak → 1 pembayaran, 1 potong stok | Lulus |
+| 21 | Pembayaran serentak dengan kunci berbeda (dua kasir/tab) → tidak ada kelebihan bayar (pesanan & nota pekerjaan) | Lulus |
+| 22 | Batal pesanan yang stoknya terpotong: tanpa barang / jumlah kurang / lebih / kondisi tidak valid → ditolak dengan rincian selisih; data tidak berubah | Lulus |
+| 23 | Batal campuran 1 layak + 1 rusak + 1 belum kembali → stok +1, catatan rusak 1, "barang belum kembali" 1 pcs tampil; saat barang datang dicatat layak → stok +1, status tetap Batal | Lulus |
+| 24 | Pembayaran vs pembatalan serentak (24× pesanan, 24× nota) → tidak pernah ada pembayaran masuk pada nota Batal, refund tidak melebihi uang diterima | Lulus |
+| 25 | Input batal yang rusak (tanpa item_id, qty bukan angka/0) → 422, tidak ada error 500 | Lulus |
+| 26 | Clone git bersih: `yarn install --frozen-lockfile` + `yarn build` berhasil; backend venv baru `pip install -r requirements-prod.txt`, `.env` dari `.env.example`, `create_owner.py`, login, data kosong, CMS terinisialisasi | Lulus |
+| 27 | `docker compose up -d --build` | **Belum dijalankan** — Docker tidak tersedia di lingkungan Emergent; jalankan di VPS | Yang tersisa di lingkungan preview: akun owner, akun uji admin/kasir, dan barang/paket berawalan `[TEST]` dari `seed_demo.py`.

@@ -26,3 +26,9 @@ Owner (Mas Latif) — semua modul, laporan laba, persetujuan diskon, pembatalan.
 
 ## Next tasks
 Tunggu masukan owner setelah mencoba alur kasir & CMS.
+
+## Update 2026-11-08 (pre-VPS fixes)
+- frontend/yarn.lock committed; .env.example (root/backend/frontend) tracked; .gitignore updated (uploads, backups, test_reports ignored); test creds moved out of source (rotated).
+- Prepaid WA order: stock deducted before settling payment is recorded (409 & no payment if stock short); ship requires stock_applied; per-nota pay_lock prevents double/over payment; cancel shares lock.
+- Order cancel requires every pcs accounted (layak/rusak/belum_kembali); outstanding items shown and receivable later.
+- Tests: 60/60 backend; clean-clone yarn build + pip install + README steps verified; Docker compose not runnable in pod.
