@@ -2,7 +2,7 @@
 import io
 import random
 import threading
-from conftest import BASE_URL, uid, stock_of, ensure_stock
+from conftest import BASE_URL, CREDS, uid, stock_of, ensure_stock
 
 B = BASE_URL + "/api"
 
@@ -28,7 +28,7 @@ def pkg_line(pkg, opt=True):
 class TestAuth:
     def test_cookies_httponly(self):
         import requests
-        r = requests.post(f"{B}/auth/login", json={"email": "kasir.test@predator.local", "password": "KasirUji#2026"})
+        r = requests.post(f"{B}/auth/login", json={"email": CREDS["kasir"][0], "password": CREDS["kasir"][1]})
         assert r.status_code == 200
         sc = r.headers.get("set-cookie", "")
         assert "access_token" in sc and "HttpOnly" in sc

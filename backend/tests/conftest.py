@@ -15,11 +15,25 @@ def _base():
 
 
 BASE_URL = _base()
-CREDS = {
-    "owner": ("ainkarip@gmail.com", "PredatorOwner#2026"),
-    "admin": ("admin.test@predator.local", "AdminUji#2026"),
-    "kasir": ("kasir.test@predator.local", "KasirUji#2026"),
-}
+
+
+def _creds():
+    """Test accounts come from env (TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD, ...) or the untracked memory/test_credentials.md."""
+    out = {}
+    f = Path(__file__).resolve().parents[2] / "memory" / "test_credentials.md"
+    lines = f.read_text().splitlines() if f.exists() else []
+    for role in ("owner", "admin", "kasir"):
+        e, p = os.environ.get(f"TEST_{role.upper()}_EMAIL"), os.environ.get(f"TEST_{role.upper()}_PASSWORD")
+        if not (e and p):
+            for line in lines:
+                if line.lower().startswith(f"- {role}") and "/" in line:
+                    e, p = [x.strip() for x in line.split(":", 1)[1].split("(")[0].split(" / ")]
+                    break
+        out[role] = (e, p)
+    return out
+
+
+CREDS = _creds()
 
 
 def login(role):

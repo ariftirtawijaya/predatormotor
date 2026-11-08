@@ -219,35 +219,46 @@ export function DiscountBox({ kind, doc, onDone, editable }) {
   );
 }
 
-export function ReturnDialog({ kind, doc, open, onClose, onDone, title = "Retur / Pengembalian", endpoint, extra }) {
+const CONDS = [["layak", "Layak jual (stok +)"], ["rusak", "Rusak (catat rusak)"], ["belum_kembali", "Belum kembali"]];
+
+export function ReturnDialog({ kind, doc, open, onClose, onDone, title = "Retur / Pengembalian", endpoint, extra, cancelMode }) {
   const used = {};
   doc.lines.filter((l) => !l.removed).forEach((l) => l.components.forEach((c) => { used[c.item_id] = { name: c.name, qty: (used[c.item_id]?.qty || 0) + c.qty * l.qty }; }));
-  (doc.returns || []).forEach((r) => r.items.forEach((i) => { if (used[i.item_id]) used[i.item_id].qty -= i.qty; }));
+  (doc.returns || []).forEach((r) => r.items.forEach((i) => { if (used[i.item_id] && i.condition !== "belum_kembali") used[i.item_id].qty -= i.qty; }));
+  const conds = cancelMode ? CONDS : CONDS.slice(0, 2);
   const [rows, setRows] = useState({});
   const [f, setF] = useState({ refund_amount: 0, refund_method: "tunai", reason: "" });
   const [key] = useState(newKey());
-  const items = Object.entries(rows).filter(([, r]) => r.qty > 0).map(([item_id, r]) => ({ item_id, qty: r.qty, condition: r.condition || "layak" }));
+  const list = Object.entries(used).filter(([, u]) => u.qty > 0);
+  const items = Object.entries(rows).flatMap(([item_id, r]) => conds.filter(([c]) => r[c] > 0).map(([c]) => ({ item_id, qty: r[c], condition: c })));
+  const sumOf = (id) => conds.reduce((s, [c]) => s + (rows[id]?.[c] || 0), 0);
+  const unassigned = list.filter(([id, u]) => sumOf(id) !== u.qty);
+  const over = list.some(([id, u]) => sumOf(id) > u.qty);
+  const blocked = over || (cancelMode && doc.stock_applied && unassigned.length > 0);
   const submit = async () => {
     const r = await act(() => api.post(endpoint || `/tx/${kind}/${doc.id}/return`, { ...f, refund_amount: Number(f.refund_amount || 0), items, idem_key: key }), "Tercatat");
     if (r) { onDone(r); onClose(); }
   };
-  const canItems = doc.stock_applied;
   return (
     <Modal open={open} onClose={onClose} title={title} wide>
       <div className="space-y-4">
         {extra}
-        {canItems && (
-          <div>
-            <p className="mb-2 text-sm font-semibold">Barang yang benar-benar kembali (isi 0 jika tidak ada)</p>
-            {Object.entries(used).filter(([, u]) => u.qty > 0).map(([id, u]) => (
-              <div key={id} className="mb-2 grid grid-cols-[1fr_80px_140px] items-center gap-2 text-sm">
-                <span>{u.name} <span className="text-xs text-slate-500">(maks {u.qty})</span></span>
-                <NumInput value={rows[id]?.qty ?? 0} max={u.qty} onChange={(v) => setRows({ ...rows, [id]: { ...rows[id], qty: Math.min(Number(v || 0), u.qty) } })} data-testid={`return-qty-${id}`} />
-                <Select value={rows[id]?.condition || "layak"} onChange={(e) => setRows({ ...rows, [id]: { ...rows[id], condition: e.target.value } })} data-testid={`return-cond-${id}`}>
-                  <option value="layak">Layak jual (stok +)</option><option value="rusak">Rusak (catat rusak)</option>
-                </Select>
+        {doc.stock_applied && (
+          <div data-testid="return-items">
+            <p className="mb-2 text-sm font-semibold">{cancelMode ? "Barang sudah keluar dari stok — tentukan status setiap pcs" : "Barang yang benar-benar kembali (isi 0 jika tidak ada)"}</p>
+            <div className="mb-1 grid gap-2 text-xs font-semibold text-slate-600" style={{ gridTemplateColumns: `1fr repeat(${conds.length}, 110px)` }}>
+              <span>Barang</span>{conds.map(([c, l]) => <span key={c}>{l}</span>)}
+            </div>
+            {list.map(([id, u]) => (
+              <div key={id} className="mb-2 grid items-center gap-2 text-sm" style={{ gridTemplateColumns: `1fr repeat(${conds.length}, 110px)` }}>
+                <span>{u.name} <span className={`text-xs ${sumOf(id) === u.qty ? "text-emerald-700" : "text-slate-500"}`}>({sumOf(id)}/{u.qty} pcs)</span></span>
+                {conds.map(([c]) => (
+                  <NumInput key={c} value={rows[id]?.[c] ?? 0} onChange={(v) => setRows({ ...rows, [id]: { ...rows[id], [c]: Math.max(0, Number(v || 0)) } })} data-testid={`return-${c}-${id}`} />
+                ))}
               </div>
             ))}
+            {cancelMode && unassigned.length > 0 && <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900" data-testid="return-unassigned">Belum ditentukan: {unassigned.map(([id, u]) => `${u.name} (${u.qty - sumOf(id)} pcs)`).join(", ")}. Semua pcs wajib dicatat sebelum pesanan dibatalkan.</p>}
+            {over && <p className="text-sm text-red-700">Jumlah melebihi barang yang keluar.</p>}
           </div>
         )}
         <div className="grid grid-cols-2 gap-2">
@@ -255,7 +266,7 @@ export function ReturnDialog({ kind, doc, open, onClose, onDone, title = "Retur 
           <Field label="Metode pengembalian"><Select value={f.refund_method} onChange={(e) => setF({ ...f, refund_method: e.target.value })} data-testid="return-refund-method"><option value="tunai">Tunai</option><option value="transfer">Transfer</option></Select></Field>
         </div>
         <Field label="Alasan / catatan keputusan"><Input value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} data-testid="return-reason-input" /></Field>
-        <Btn v="danger" disabled={f.reason.length < 3} onClick={submit} data-testid="return-submit">Simpan</Btn>
+        <Btn v="danger" disabled={f.reason.length < 3 || blocked} onClick={submit} data-testid="return-submit">Simpan</Btn>
       </div>
     </Modal>
   );

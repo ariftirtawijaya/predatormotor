@@ -2,11 +2,11 @@
 import json
 import sys
 import requests
-from conftest import BASE_URL
+from conftest import BASE_URL, CREDS
 
 B = BASE_URL + "/api"
 s = requests.Session()
-s.post(f"{B}/auth/login", json={"email": "admin.test@predator.local", "password": "AdminUji#2026"})
+s.post(f"{B}/auth/login", json={"email": CREDS["admin"][0], "password": CREDS["admin"][1]})
 cms = {d["key"]: d for d in s.get(f"{B}/cms").json()}
 SNAP = "/tmp/cms_snapshot.json"
 if sys.argv[1] == "apply":

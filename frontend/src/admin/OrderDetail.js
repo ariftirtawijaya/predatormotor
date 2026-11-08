@@ -33,6 +33,7 @@ export default function OrderDetail() {
               {o.notes && <p className="sm:col-span-2 text-slate-600">Catatan: {o.notes}</p>}
               <p>Resi: <b data-testid="order-resi">{o.resi || "-"}</b></p>
               <p>Stok: <b data-testid="order-stock-status">{o.stock_applied ? "sudah dikurangi" : "belum dikurangi"}</b></p>
+              {!cod && o.paid >= o.total && o.total > 0 && !o.stock_applied && <p className="sm:col-span-2 font-semibold text-red-700" data-testid="order-stock-pending">Pembayaran lunas tetapi stok belum terpotong — tambah stok lalu tekan Kirim/Diambil untuk memotong stok.</p>}
               {cod && <p className="sm:col-span-2">Dana COD: <b data-testid="order-cod-status">{o.cod_settled ? "sudah cair" : o.stock_applied ? "belum cair" : "paket belum dikirim"}</b></p>}
             </div>
             {o.delivery === "kurir" && !closed && (
@@ -60,10 +61,16 @@ export default function OrderDetail() {
             {["Dikirim", "Diterima", "Diambil"].includes(o.ship_status) && isManager(user) && <Btn v="outline" onClick={() => setModal("return")} data-testid="order-return-button">Paket kembali / retur</Btn>}
           </div>
           {o.cancel && <p className="text-sm" data-testid="order-cancel-info">Dibatalkan {o.cancel.by}: {o.cancel.reason} · refund {rp(o.cancel.refund)}</p>}
+          {["Batal", "Kembali"].includes(o.ship_status) && !!o.outstanding_items?.length && (
+            <Card title="Barang belum kembali ke bengkel" data-testid="order-outstanding">
+              {o.outstanding_items.map((i) => <p key={i.item_id} className="text-sm text-amber-900">{i.name}: {i.qty} pcs</p>)}
+              {isManager(user) && <Btn size="sm" v="outline" className="mt-2" onClick={() => setModal("return")} data-testid="order-receive-back">Catat barang kembali</Btn>}
+            </Card>
+          )}
         </div>
       </div>
       {modal === "return" && <ReturnDialog kind="order" doc={o} open onClose={() => setModal("")} onDone={setO} title="Paket kembali / retur" />}
-      {modal === "cancel" && <ReturnDialog kind="order" doc={o} open onClose={() => setModal("")} onDone={setO} title="Batalkan pesanan" endpoint={`/orders/${id}/cancel`} />}
+      {modal === "cancel" && <ReturnDialog kind="order" doc={o} open onClose={() => setModal("")} onDone={setO} title="Batalkan pesanan" endpoint={`/orders/${id}/cancel`} cancelMode />}
     </div>
   );
 }

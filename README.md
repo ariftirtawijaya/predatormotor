@@ -52,7 +52,9 @@ echo "REACT_APP_BACKEND_URL=http://localhost:8001" > .env
 yarn install && yarn start
 ```
 
-Data uji (hanya untuk pengembangan, **jangan di produksi**): `ALLOW_DEMO_SEED=true python seed_demo.py` (membuat admin/kasir uji dan barang berawalan `[TEST]`).
+Data uji (hanya untuk pengembangan, **jangan di produksi**): `ALLOW_DEMO_SEED=true DEMO_ADMIN_PASSWORD=<min8> DEMO_KASIR_PASSWORD=<min8> python seed_demo.py` (membuat admin/kasir uji dan barang berawalan `[TEST]`).
+
+Tes backend (butuh backend berjalan + data uji): isi `TEST_OWNER_EMAIL`, `TEST_OWNER_PASSWORD`, `TEST_ADMIN_EMAIL`, `TEST_ADMIN_PASSWORD`, `TEST_KASIR_EMAIL`, `TEST_KASIR_PASSWORD`, `REACT_APP_BACKEND_URL`, lalu `pip install pytest requests && python -m pytest tests -q`.
 
 ## 3. Deploy ke VPS baru (Docker Compose + HTTPS otomatis)
 

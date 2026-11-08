@@ -1,12 +1,12 @@
 """Data contoh KHUSUS pengujian. Jangan jalankan di produksi.
-Pemakaian: ALLOW_DEMO_SEED=true python seed_demo.py"""
+Pemakaian: ALLOW_DEMO_SEED=true DEMO_ADMIN_PASSWORD=... DEMO_KASIR_PASSWORD=... python seed_demo.py"""
 import asyncio
 import os
 import sys
 from core import db, new_id, hash_pw, iso, move_stock
 
-USERS = [("admin.test@predator.local", "Admin Uji", "admin", "AdminUji#2026"),
-         ("kasir.test@predator.local", "Kasir Uji", "kasir", "KasirUji#2026")]
+USERS = [("admin.test@predator.local", "Admin Uji", "admin", "DEMO_ADMIN_PASSWORD"),
+         ("kasir.test@predator.local", "Kasir Uji", "kasir", "DEMO_KASIR_PASSWORD")]
 ITEMS = [("TEST-BILED-01", "[TEST] BiLED 3 inch", "BiLED", "TestBrand", "3 inch", 600000, 900000, 365, 10),
          ("TEST-SHROUD-01", "[TEST] Shroud Standar", "Shroud", "TestBrand", "Hitam", 80000, 150000, 90, 10),
          ("TEST-SHROUD-RGB", "[TEST] Shroud RGB", "Shroud", "TestBrand", "RGB", 150000, 350000, 90, 5),
@@ -19,7 +19,11 @@ async def main():
         print("Set ALLOW_DEMO_SEED=true untuk menjalankan. Jangan di produksi.")
         sys.exit(1)
     system = {"id": "seed", "name": "seed-demo"}
-    for email, name, role, pw in USERS:
+    for email, name, role, env in USERS:
+        pw = os.environ.get(env)
+        if not pw or len(pw) < 8:
+            print(f"Set {env} (min 8 karakter).")
+            sys.exit(1)
         if not await db.users.find_one({"email": email}):
             await db.users.insert_one({"id": new_id(), "email": email, "name": name, "role": role, "active": True,
                                        "password_hash": hash_pw(pw), "created_at": iso(), "demo": True})

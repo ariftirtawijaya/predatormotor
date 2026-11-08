@@ -90,6 +90,10 @@ async def with_extras(kind, doc, user):
     doc["payments"] = await find_list("payments", {"ref_type": kind, "ref_id": doc["id"]}, [("created_at", 1)])
     if kind in ("job", "sale"):
         doc["claims"] = await find_list("jobs", {"claim.ref_id": doc["id"]}, [("created_at", 1)])
+    if kind == "order":
+        out = outstanding(doc)
+        names = {x["id"]: x["name"] for x in await find_list("items", {"id": {"$in": list(out)}})}
+        doc["outstanding_items"] = [{"item_id": k, "name": names.get(k, "?"), "qty": v} for k, v in out.items()]
     return strip_cost(doc, user)
 
 
@@ -416,10 +420,14 @@ class PayIn(BaseModel):
 
 
 async def apply_order_stock(doc, user, reason):
+    """Deduct order stock once. Returns True if deducted now, False if already deducted; raises 409 otherwise."""
     locked = await db.orders.find_one_and_update({"id": doc["id"], "stock_applied": False, "lock": {"$ne": True}},
                                                  {"$set": {"lock": True}}, return_document=ReturnDocument.AFTER)
     if not locked:
-        return
+        cur = await load("order", doc["id"])
+        if cur.get("stock_applied"):
+            return False
+        raise HTTPException(409, "Pesanan sedang diproses oleh permintaan lain. Muat ulang lalu coba lagi.")
     try:
         await move_many(usage(locked), "keluar_pesanan_wa", reason, user, "order", doc["id"], doc["no"])
     except HTTPException:
@@ -427,6 +435,12 @@ async def apply_order_stock(doc, user, reason):
         raise
     await db.orders.update_one({"id": doc["id"]}, {"$set": {"lock": False, "stock_applied": True, "recognized": True,
                                                             "recognized_date": local_date(), "stock_applied_at": iso()}})
+    return True
+
+
+async def revert_order_stock(doc, user, reason):
+    await move_many([(i, -d) for i, d in usage(doc)], "pembatalan_otomatis", reason, user, "order", doc["id"], doc["no"])
+    await db.orders.update_one({"id": doc["id"]}, {"$set": {"stock_applied": False, "recognized": False, "recognized_date": None}})
 
 
 @router.post("/tx/{kind}/{tid}/payments")
@@ -453,10 +467,21 @@ async def pay(kind: str, tid: str, body: PayIn, user=Depends(require(*STAFF))):
     recognized = doc.get("recognized")
     pkind = "cod_cair" if body.method == "cod" else ("pelunasan" if (recognized or body.amount == remaining) and doc["paid"] > 0
                                                        else ("dp" if not recognized and body.amount < remaining else "pembayaran"))
-    await add_payment(kind, doc, body.amount, body.method, pkind, user, body.idem_key, body.note)
+    deducted = False
+    if kind == "order" and doc["payment_type"] == "prabayar" and doc["paid"] + body.amount >= doc["total"]:
+        # Stock first: if it fails (409) the settling payment is NOT recorded.
+        deducted = await apply_order_stock(doc, user, f"Pesanan WA lunas {doc['no']}")
+    try:
+        p = await add_payment(kind, doc, body.amount, body.method, pkind, user, body.idem_key, body.note)
+    except Exception:
+        if deducted:
+            await revert_order_stock(doc, user, f"Pembayaran gagal dicatat {doc['no']}")
+        raise
+    if p is None:
+        if deducted:
+            await revert_order_stock(doc, user, f"Permintaan pembayaran ganda {doc['no']}")
+        return await with_extras(kind, await load(kind, tid), user)
     doc = await load(kind, tid)
-    if kind == "order" and doc["payment_type"] == "prabayar" and doc["paid"] >= doc["total"]:
-        await apply_order_stock(doc, user, f"Pesanan WA lunas {doc['no']}")
     if kind == "order" and doc["payment_type"] == "cod" and doc["paid"] >= doc["total"]:
         await db.orders.update_one({"id": tid}, {"$set": {"cod_settled": True, "cod_settled_at": iso()}})
     await audit(user, "catat_pembayaran", kind, tid, after={"amount": body.amount, "method": body.method, "kind": pkind})
@@ -478,21 +503,36 @@ class ReturnIn(BaseModel):
     idem_key: str | None = None
 
 
-async def process_return(kind, doc, body, user):
-    if body.idem_key and any(r.get("idem_key") == body.idem_key for r in doc.get("returns", [])):
-        return
-    if not doc.get("stock_applied") and body.items:
-        raise HTTPException(400, "Barang belum keluar dari stok")
+RETURN_CONDITIONS = ("layak", "rusak", "belum_kembali")
+
+
+def outstanding(doc):
+    """Qty per item that left stock and has not yet physically come back (layak/rusak)."""
+    if not doc.get("stock_applied"):
+        return {}
     used = {}
     for iid, d in usage(doc):
         used[iid] = used.get(iid, 0) - d
     for r in doc.get("returns", []):
         for it in r["items"]:
-            used[it["item_id"]] = used.get(it["item_id"], 0) - it["qty"]
+            if it["condition"] != "belum_kembali":
+                used[it["item_id"]] = used.get(it["item_id"], 0) - it["qty"]
+    return {k: v for k, v in used.items() if v > 0}
+
+
+async def process_return(kind, doc, body, user):
+    if body.idem_key and any(r.get("idem_key") == body.idem_key for r in doc.get("returns", [])):
+        return
+    if not doc.get("stock_applied") and body.items:
+        raise HTTPException(400, "Barang belum keluar dari stok")
+    used = outstanding(doc)
+    req = {}
     for it in body.items:
-        if it.condition not in ("layak", "rusak"):
-            raise HTTPException(400, "Kondisi harus layak atau rusak")
-        if it.qty > used.get(it.item_id, 0):
+        if it.condition not in RETURN_CONDITIONS:
+            raise HTTPException(400, "Kondisi harus layak, rusak, atau belum_kembali")
+        req[it.item_id] = req.get(it.item_id, 0) + it.qty
+    for iid, q in req.items():
+        if q > used.get(iid, 0):
             raise HTTPException(400, "Jumlah retur melebihi barang yang keluar")
     if body.refund_amount > doc["paid"] - doc.get("refunded", 0):
         raise HTTPException(400, "Pengembalian uang melebihi uang yang diterima")
@@ -505,8 +545,9 @@ async def process_return(kind, doc, body, user):
                                 user, False, kind, doc["id"], doc["no"], "rusak")
     if body.refund_amount:
         await add_payment(kind, doc, body.refund_amount, body.refund_method, "refund", user, None, f"Retur: {body.reason}", "out")
+    physical = [i for i in body.items if i.condition != "belum_kembali"]
     write_off = 0
-    if kind == "order" and body.items and doc["payment_type"] == "cod" and not doc.get("cod_settled") and not doc.get("written_off"):
+    if kind == "order" and physical and doc["payment_type"] == "cod" and not doc.get("cod_settled") and not doc.get("written_off"):
         write_off = max(doc["total"] - doc.get("shipping_cost", 0) - doc["paid"], 0)
         await db.orders.update_one({"id": doc["id"]}, {"$set": {"written_off": write_off}})
     rec = {"id": new_id(), "items": [i.model_dump() | {"name": names.get(i.item_id)} for i in body.items], "refund": body.refund_amount,
@@ -524,8 +565,10 @@ async def tx_return(kind: str, tid: str, body: ReturnIn, user=Depends(require(*M
     doc = await load(kind, tid)
     if kind == "job" and doc["status"] != "Selesai":
         raise HTTPException(400, "Retur hanya untuk nota Selesai")
+    if any(i.condition == "belum_kembali" for i in body.items):
+        raise HTTPException(400, "Pada retur, catat hanya barang yang benar-benar kembali (layak/rusak)")
     await process_return(kind, doc, body, user)
-    if kind == "order" and body.items:
+    if kind == "order" and body.items and doc["ship_status"] != "Batal":
         await db.orders.update_one({"id": tid}, {"$set": {"ship_status": "Kembali"}})
     return await with_extras(kind, await load(kind, tid), user)
 
@@ -708,8 +751,12 @@ async def ship_order(oid: str, body: ShipIn, user=Depends(require(*STAFF))):
         raise HTTPException(400, "Diskon masih menunggu persetujuan owner")
     if doc["payment_type"] == "prabayar" and doc["paid"] < doc["total"]:
         raise HTTPException(400, "Pesanan prabayar harus lunas sebelum dikirim/diambil")
+    if doc["payment_type"] == "prabayar" and not doc.get("stock_applied"):
+        await apply_order_stock(doc, user, f"Pesanan WA lunas {doc['no']} (pemotongan stok tertunda)")
     if doc["payment_type"] == "cod":
         await apply_order_stock(doc, user, f"Pesanan COD dikirim {doc['no']}")
+    if not (await load("order", oid)).get("stock_applied"):
+        raise HTTPException(409, "Stok pesanan belum berhasil dipotong. Pesanan tidak dapat dikirim.")
     status = "Diambil" if doc["delivery"] == "ambil" else "Dikirim"
     upd = {"ship_status": status, "shipped_at": iso(), "shipped_by": user["name"]}
     if body.resi:
@@ -733,19 +780,37 @@ async def cancel_order(oid: str, body: CancelIn, user=Depends(require("owner")))
     doc = await load("order", oid)
     if doc["ship_status"] not in ("Baru",):
         raise HTTPException(400, "Pesanan yang sudah dikirim dicatat lewat 'Paket kembali/Retur'")
-    if doc.get("stock_applied"):
-        items = [ReturnItem(**i) for i in body.items]
-        await process_return("order", doc, ReturnIn(items=items, refund_amount=body.refund_amount, refund_method=body.refund_method,
-                                                    reason=f"Batal: {body.reason}", idem_key=body.idem_key), user)
-    elif body.refund_amount:
-        if body.refund_amount > doc["paid"] - doc["refunded"]:
-            raise HTTPException(400, "Pengembalian melebihi uang yang diterima")
-        await add_payment("order", doc, body.refund_amount, body.refund_method, "refund", user, body.idem_key, f"Batal: {body.reason}", "out")
+    out = outstanding(doc)
+    req = {}
+    for i in body.items:
+        if i.get("condition") not in RETURN_CONDITIONS or int(i.get("qty") or 0) < 1:
+            raise HTTPException(400, "Setiap barang harus berstatus layak, rusak, atau belum_kembali dengan jumlah ≥ 1")
+        req[i["item_id"]] = req.get(i["item_id"], 0) + int(i["qty"])
+    if req != out:
+        names = {x["id"]: x["name"] for x in await find_list("items", {"id": {"$in": list(set(out) | set(req))}})}
+        diff = ", ".join(f"{names.get(k, k)}: keluar {out.get(k, 0)}, dicatat {req.get(k, 0)}" for k in sorted(set(out) | set(req))
+                         if out.get(k, 0) != req.get(k, 0))
+        raise HTTPException(400, f"Semua barang yang sudah keluar dari stok harus dicatat (layak / rusak / belum kembali). Selisih: {diff}")
+    locked = await db.orders.find_one_and_update({"id": oid, "ship_status": "Baru", "lock": {"$ne": True}}, {"$set": {"lock": True}})
+    if not locked:
+        raise HTTPException(409, "Pesanan sedang diproses. Muat ulang lalu coba lagi.")
+    try:
+        if doc.get("stock_applied"):
+            items = [ReturnItem(**i) for i in body.items]
+            await process_return("order", doc, ReturnIn(items=items, refund_amount=body.refund_amount, refund_method=body.refund_method,
+                                                        reason=f"Batal: {body.reason}", idem_key=body.idem_key), user)
+        elif body.refund_amount:
+            if body.refund_amount > doc["paid"] - doc["refunded"]:
+                raise HTTPException(400, "Pengembalian melebihi uang yang diterima")
+            await add_payment("order", doc, body.refund_amount, body.refund_method, "refund", user, body.idem_key, f"Batal: {body.reason}", "out")
+    finally:
+        await db.orders.update_one({"id": oid}, {"$set": {"lock": False}})
     doc = await load("order", oid)
+    not_back = [{"item_id": i["item_id"], "qty": int(i["qty"])} for i in body.items if i["condition"] == "belum_kembali"]
     await db.orders.update_one({"id": oid}, {"$set": {"ship_status": "Batal", "cancel": {
         "reason": body.reason, "refund": body.refund_amount, "kept": doc["paid"] - doc["refunded"], "by": user["name"], "at": iso(),
-        "date_local": local_date()}}})
-    await audit(user, "batal_pesanan", "order", oid, after={"refund": body.refund_amount}, reason=body.reason)
+        "date_local": local_date(), "items": body.items, "items_not_returned": not_back}}})
+    await audit(user, "batal_pesanan", "order", oid, after={"refund": body.refund_amount, "items": body.items}, reason=body.reason)
     return await with_extras("order", await load("order", oid), user)
 
 
