@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api")
 KEYS = ["identity", "navigation", "home", "profile", "services", "catalog", "gallery", "contact", "footer", "seo", "pages"]
 MAX_MB = int(os.environ.get("MAX_UPLOAD_MB", "5"))
 URL_RE = re.compile(r"(href|link|url|_image|^image|logo|favicon|photo)$", re.I)
-SAFE_URL = re.compile(r"^(https?://|/|#|mailto:|tel:)", re.I)
+SAFE_URL = re.compile(r"^(https?://|/(?![/\\])|#|mailto:|tel:)", re.I)
 TAG = re.compile(r"<[^>]*>")
 
 SECTIONS = [

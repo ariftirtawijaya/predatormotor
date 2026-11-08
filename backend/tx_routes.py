@@ -211,6 +211,8 @@ async def edit_job_line(jid: str, lid: str, body: LineEdit, user=Depends(require
         line["unit_price"] = body.unit_price
     line["subtotal"] = line["qty"] * line["unit_price"]
     line["edited_by"] = user["name"]
+    if totals(doc)["total"] < doc["paid"]:
+        raise HTTPException(400, "Total baru lebih kecil dari uang yang sudah dibayar")
     await set_line(jid, line)
     await audit(user, "ubah_baris", "job", jid, before=before | {"name": line["name"]},
                 after={"qty": line["qty"], "unit_price": line["unit_price"]}, reason=body.reason)
@@ -229,6 +231,8 @@ async def remove_job_line(jid: str, lid: str, body: ReasonIn, user=Depends(requi
     if not line:
         raise HTTPException(404, "Baris tidak ditemukan")
     line.update(removed=True, removed_by=user["name"], removed_at=iso(), removed_reason=body.reason)
+    if totals(doc)["total"] < doc["paid"]:
+        raise HTTPException(400, "Total baru lebih kecil dari uang yang sudah dibayar")
     await set_line(jid, line)
     await audit(user, "hapus_baris", "job", jid, before={"name": line["name"], "qty": line["qty"], "price": line["unit_price"]}, reason=body.reason)
     return await with_extras("job", await load("job", jid), user)
@@ -502,8 +506,8 @@ async def process_return(kind, doc, body, user):
     if body.refund_amount:
         await add_payment(kind, doc, body.refund_amount, body.refund_method, "refund", user, None, f"Retur: {body.reason}", "out")
     write_off = 0
-    if kind == "order" and body.items and doc["payment_type"] == "cod" and not doc.get("cod_settled"):
-        write_off = max(doc["total"] - doc["paid"], 0)
+    if kind == "order" and body.items and doc["payment_type"] == "cod" and not doc.get("cod_settled") and not doc.get("written_off"):
+        write_off = max(doc["total"] - doc.get("shipping_cost", 0) - doc["paid"], 0)
         await db.orders.update_one({"id": doc["id"]}, {"$set": {"written_off": write_off}})
     rec = {"id": new_id(), "items": [i.model_dump() | {"name": names.get(i.item_id)} for i in body.items], "refund": body.refund_amount,
            "write_off": write_off,

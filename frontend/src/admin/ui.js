@@ -24,12 +24,13 @@ export const Field = ({ label, children, hint, className = "" }) => (
   </label>
 );
 
-const INP = "w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-100";
+const INP = "rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-100";
 
-export const Input = ({ className = "", ...p }) => <input {...p} className={`h-10 ${INP} ${className}`} />;
-export const Textarea = ({ className = "", ...p }) => <textarea rows={3} {...p} className={`py-2 ${INP} ${className}`} />;
+const wf = (c) => (/(^|\s)!?w-/.test(c) ? "" : "w-full");
+export const Input = ({ className = "", ...p }) => <input {...p} className={`h-10 ${wf(className)} ${INP} ${className}`} />;
+export const Textarea = ({ className = "", ...p }) => <textarea rows={3} {...p} className={`py-2 w-full ${INP} ${className}`} />;
 export const Select = ({ className = "", children, ...p }) => (
-  <select {...p} className={`h-10 ${INP} ${className}`}>{children}</select>
+  <select {...p} className={`h-10 ${wf(className)} ${INP} ${className}`}>{children}</select>
 );
 
 export const NumInput = ({ value, onChange, ...p }) => (

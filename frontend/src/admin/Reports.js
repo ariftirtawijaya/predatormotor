@@ -13,9 +13,9 @@ export default function Reports() {
   const exp = (k) => `${BACKEND}/api/reports/export?kind=${k}&start=${r.start}&end=${r.end}`;
   return (
     <div className="print-area w-full">
-      <PageHead title="Laporan" sub={`Periode ${fmtDate(r.start)} – ${fmtDate(r.end)} (WIB)`} actions={<div className="no-print flex flex-wrap gap-2">
-        <Input type="date" className="w-40" value={r.start} onChange={(e) => setR({ ...r, start: e.target.value })} data-testid="report-start" />
-        <Input type="date" className="w-40" value={r.end} onChange={(e) => setR({ ...r, end: e.target.value })} data-testid="report-end" />
+      <PageHead title="Laporan" sub={`Periode ${fmtDate(r.start)} – ${fmtDate(r.end)} (WIB)`} actions={<div className="no-print flex flex-wrap items-center gap-2">
+        <Input type="date" className="!w-40" value={r.start} onChange={(e) => setR({ ...r, start: e.target.value })} data-testid="report-start" />
+        <Input type="date" className="!w-40" value={r.end} onChange={(e) => setR({ ...r, end: e.target.value })} data-testid="report-end" />
         <Btn v="outline" onClick={() => setR({ start: today(), end: today() })} data-testid="report-today">Hari ini</Btn>
         <Btn v="dark" onClick={() => window.print()} data-testid="report-print">Cetak / PDF</Btn></div>} />
       {!d ? <p>Memuat…</p> : (
@@ -69,7 +69,7 @@ export default function Reports() {
           <Card title="Ekspor data" className="no-print">
             <div className="flex flex-wrap gap-2">
               {[["transactions", "Transaksi"], ["payments", "Pembayaran"], ["mutations", "Mutasi stok"], ["damaged", "Barang rusak"], ["expenses", "Biaya"], ["inventory", "Persediaan"]].map(([k, l]) => (
-                <a key={k} href={exp(k)}><Btn v="outline" size="sm" data-testid={`export-${k}`}>CSV {l}</Btn></a>
+                <Btn key={k} v="outline" size="sm" onClick={() => { window.location.href = exp(k); }} data-testid={`export-${k}`}>CSV {l}</Btn>
               ))}
             </div>
           </Card>
