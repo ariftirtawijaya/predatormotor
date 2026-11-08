@@ -123,6 +123,14 @@ Data & foto tetap aman di volume.
 - Tautan nota publik memakai token acak 32 karakter dan hanya menampilkan nama, item, total & pembayaran (tanpa nomor WA/alamat/modal).
 - Audit log untuk perubahan penting (baris nota, diskon, pembayaran, koreksi stok, pembatalan, publikasi CMS, pengguna).
 
+## 5a. WhatsApp via Fonnte
+- Owner mengisi **token Fonnte** dan **nomor WhatsApp admin** di menu *Pengaturan · WhatsApp* — tidak perlu mengubah `.env` atau deploy ulang.
+- Token disimpan terenkripsi di MongoDB (koleksi `settings`) dengan kunci turunan `JWT_SECRET`. Jika `JWT_SECRET` diganti, token harus diisi ulang dari panel.
+- Nomor admin = nomor WhatsApp di CMS Kontak (draft). Website publik baru berubah setelah bagian Kontak diterbitkan.
+- Pesan dikirim dari perangkat WhatsApp yang terhubung ke token Fonnte. Nota hanya dikirim saat petugas menekan tombol; riwayat ada di koleksi `wa_logs`.
+- Server VPS harus bisa mengakses `https://api.fonnte.com` (HTTPS keluar).
+
+
 ## 6. Batasan yang diketahui
 - MongoDB dijalankan tanpa replica set, jadi tidak memakai multi-document transaction; konsistensi dijaga dengan operasi atomik per dokumen, kunci status, kunci idempoten, dan rollback kompensasi (tercatat sebagai mutasi "Batal otomatis").
 - SEO dirender di sisi klien (SPA). Judul/deskripsi/OG diatur per halaman, tetapi crawler yang tidak menjalankan JavaScript (sebagian pratinjau tautan WhatsApp/Facebook) mungkin hanya melihat judul default `index.html`.

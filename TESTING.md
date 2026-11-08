@@ -40,3 +40,22 @@ Suite backend: `python -m pytest tests/ -q -n 0` → **60 lulus / 60** (diuji ul
 | 25 | Input batal yang rusak (tanpa item_id, qty bukan angka/0) → 422, tidak ada error 500 | Lulus |
 | 26 | Clone git bersih: `yarn install --frozen-lockfile` + `yarn build` berhasil; backend venv baru `pip install -r requirements-prod.txt`, `.env` dari `.env.example`, `create_owner.py`, login, data kosong, CMS terinisialisasi | Lulus |
 | 27 | `docker compose up -d --build` | **Belum dijalankan** — Docker tidak tersedia di lingkungan Emergent; jalankan di VPS | Yang tersisa di lingkungan preview: akun owner, akun uji admin/kasir, dan barang/paket berawalan `[TEST]` dari `seed_demo.py`.
+
+
+## Integrasi WhatsApp Fonnte (2026-11-08)
+
+Suite backend lengkap: `cd backend && python -m pytest tests/ -q -n 0` → **94 lulus / 94** (termasuk `test_whatsapp_fonnte.py` 26 tes dan `test_wa_live_api.py` 8 tes). Frontend: `cd frontend && CI=true yarn test --watchAll=false src/lib/wa.test.js` → 4/4. API Fonnte di-mock (respx) — tidak ada pesan nyata yang dikirim saat tes.
+
+| # | Skenario | Hasil |
+|---|---|---|
+| 28 | Pengaturan WhatsApp hanya owner (admin/kasir 403 di API & halaman) | Lulus |
+| 29 | Token disimpan terenkripsi, tampil tersamar `••••••••1234`, tidak pernah ada di respons API, audit log, CMS, atau riwayat kirim; ganti & hapus token | Lulus |
+| 30 | Nomor admin: satu sumber (draft CMS Kontak), web publik berubah hanya setelah diterbitkan; simpan CMS Kontak oleh admin tidak mengubah nomor | Lulus |
+| 31 | Normalisasi nomor 08… / 62… / +62… (spasi & tanda hubung) → 62…; nomor tidak valid ditolak | Lulus |
+| 32 | Kirim nota pekerjaan: header `Authorization` tanpa `Bearer`, data form, isi dari data tersimpan (rincian, diskon disetujui, pembayaran, sisa, tautan nota) tanpa harga modal; transaksi tidak berubah | Lulus |
+| 33 | Fonnte menolak (`status:false`) → status "Ditolak" + alasan; timeout → "Tidak pasti", 1 panggilan saja (tanpa kirim ulang otomatis); koneksi gagal → "Gagal" | Lulus |
+| 34 | Klik ganda (kunci sama) → 1 pengiriman; 5 klik serentak → 1 pengiriman; kirim lagi tanpa "Kirim Ulang" → 409; kirim ulang wajib alasan & tercatat | Lulus |
+| 35 | Penjualan tanpa nomor pembeli → kasir mengisi nomor penerima; pekerjaan tanpa nomor ditolak; tanpa token → 409 tanpa memanggil Fonnte | Lulus |
+| 36 | UI: halaman pengaturan, dialog kirim nota (pekerjaan/penjualan/pesanan), cetak 80 mm & A4 tetap jalan, tampilan ponsel 390px | Lulus |
+| 37 | Pengiriman nyata dengan akun & perangkat Fonnte | **Belum diuji** — perlu token asli milik owner |
+

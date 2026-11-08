@@ -270,7 +270,7 @@ async def nota_message(kind, doc, origin):
     rows.append(f"Total dibayar: {rp(doc['paid'])}")
     if doc.get("refunded"):
         rows.append(f"Dikembalikan: {rp(doc['refunded'])}")
-    if not cancelled:
+    if not cancelled and doc["total"] > 0:
         rem = max(doc["total"] - doc["paid"], 0)
         rows.append(f"*Sisa tagihan: {rp(rem)}*" if rem else "*Status pembayaran: LUNAS*")
     if kind == "order" and doc.get("payment_type") == "cod" and not cancelled:
@@ -296,8 +296,13 @@ async def nota_preview(kind: str, tid: str, request: Request, user=Depends(requi
     check_kind(kind)
     doc = await get_or_404(COLL[kind], tid, "Transaksi tidak ditemukan")
     phone = stored_phone(doc)
+    try:
+        phone = normalize_wa(phone) if phone else ""
+        bad = False
+    except HTTPException:
+        bad = True
     d = await settings_doc()
-    return {"target": phone, "target_editable": kind == "sale" and not phone, "message": await nota_message(kind, doc, req_origin(request)),
+    return {"target": phone, "target_invalid": bad, "target_editable": kind == "sale" and not phone, "message": await nota_message(kind, doc, req_origin(request)),
             "token_configured": bool(d.get("token_enc")),
             "logs": await find_list("wa_logs", {"ref_type": kind, "ref_id": tid}, [("created_at", -1)], 50)}
 

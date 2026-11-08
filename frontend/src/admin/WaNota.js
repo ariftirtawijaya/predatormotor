@@ -54,11 +54,11 @@ function SendForm({ kind, doc, info, onSent }) {
         <Field label="Nomor WhatsApp penerima" hint={target && !normalizeWa(target) ? "Format 08…, 62…, atau +62…" : "Nomor pembeli tidak tersimpan di nota ini."}>
           <Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="08…" data-testid="wa-nota-target-input" />
         </Field>
-      ) : <p className="text-sm">Dikirim ke: <b data-testid="wa-nota-target">{info.target || "—"}</b></p>}
+      ) : <p className="text-sm">Dikirim ke: <b data-testid="wa-nota-target">{info.target || "—"}</b>{info.target_invalid && <span className="block text-red-700" data-testid="wa-nota-target-invalid">Nomor pelanggan tersimpan tidak valid. Perbaiki data pelanggan terlebih dahulu.</span>}</p>}
       {resend && <Field label="Alasan kirim ulang" hint="Nota ini sudah pernah dikirim/masuk antrean. Pelanggan bisa menerima nota ganda.">
         <Input value={reason} onChange={(e) => setReason(e.target.value)} data-testid="wa-nota-resend-reason" /></Field>}
       {err && <p className="rounded-md bg-red-50 p-2 text-sm text-red-800" data-testid="wa-nota-error">{err}</p>}
-      <Btn v={resend ? "outline" : "success"} disabled={busy || !validTarget || (!info.target && !info.target_editable) || (resend && reason.trim().length < 3)} onClick={send} data-testid={resend ? "wa-nota-resend" : "wa-nota-submit"}>
+      <Btn v={resend ? "outline" : "success"} disabled={busy || !validTarget || (!info.target && !info.target_editable) || info.target_invalid || (resend && reason.trim().length < 3)} onClick={send} data-testid={resend ? "wa-nota-resend" : "wa-nota-submit"}>
         <Send className="h-4 w-4" />{busy ? "Mengirim…" : resend ? "Kirim Ulang Nota" : "Kirim Nota"}
       </Btn>
     </div>
@@ -76,7 +76,7 @@ export function SendNotaWA({ kind, doc }) {
   return (
     <>
       <Btn v="success" size="sm" onClick={show} data-testid="nota-send-wa"><Send className="h-4 w-4" />Kirim Nota via WhatsApp</Btn>
-      <Modal open={open} onClose={() => setOpen(false)} title={`Kirim nota ${doc.no} via WhatsApp`} wide>
+      <Modal open={open} onClose={() => setOpen(false)} title="Kirim nota via WhatsApp" wide>
         {!info ? <p className="text-sm text-slate-500">Memuat…</p> : info.error ? <p className="text-sm text-red-700">{info.error}</p> : (
           <div className="space-y-4" data-testid="wa-nota-dialog">
             {!info.token_configured && <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900" data-testid="wa-nota-no-token">Token Fonnte belum diatur. Minta owner mengisinya di Pengaturan → WhatsApp.</p>}
