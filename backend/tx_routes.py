@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
-from core import (db, iso, new_id, local_date, token, find_list, get_or_404, require, audit, strip_cost, norm_phone, norm_plate,
+from core import (db, now, iso, new_id, local_date, token, find_list, get_or_404, require, audit, strip_cost, norm_phone, norm_plate,
                   next_number, move_many, add_payment, record_damage, recompute_paid, COLL, STAFF, MANAGERS)
 from master_routes import upsert_customer, upsert_vehicle, JAVA
 
@@ -282,11 +282,17 @@ async def complete_job(jid: str, user=Depends(require(*STAFF))):
     return await with_extras("job", await load("job", jid), user)
 
 
+class ReturnItem(BaseModel):
+    item_id: str = Field(min_length=1)
+    qty: int = Field(ge=1, le=9999)
+    condition: str
+
+
 class CancelIn(BaseModel):
     reason: str = Field(min_length=3)
     refund_amount: int = Field(default=0, ge=0)
     refund_method: str = "tunai"
-    items: list[dict] = []
+    items: list[ReturnItem] = []
     idem_key: str | None = None
 
 
@@ -447,6 +453,23 @@ async def revert_order_stock(doc, user, reason):
 async def pay(kind: str, tid: str, body: PayIn, user=Depends(require(*STAFF))):
     if kind not in ("job", "order"):
         raise HTTPException(400, "Jenis tidak valid")
+    await load(kind, tid)
+    # One payment at a time per nota: balance check + insert happen under this lock (stale after 30 s).
+    cutoff = (now() - timedelta(seconds=30)).isoformat()
+    stamp = iso()
+    got = await db[COLL[kind]].find_one_and_update({"id": tid, "$or": [{"pay_lock": None}, {"pay_lock": {"$lt": cutoff}}]},
+                                                   {"$set": {"pay_lock": stamp}})
+    if not got:
+        if body.idem_key and await db.payments.find_one({"idem_key": body.idem_key}):
+            return await with_extras(kind, await load(kind, tid), user)
+        raise HTTPException(409, "Pembayaran lain untuk nota ini sedang diproses. Muat ulang lalu periksa sisa tagihan.")
+    try:
+        return await _pay(kind, tid, body, user)
+    finally:
+        await db[COLL[kind]].update_one({"id": tid, "pay_lock": stamp}, {"$set": {"pay_lock": None}})
+
+
+async def _pay(kind, tid, body, user):
     doc = await load(kind, tid)
     if body.idem_key and await db.payments.find_one({"idem_key": body.idem_key}):
         return await with_extras(kind, doc, user)
@@ -489,12 +512,6 @@ async def pay(kind: str, tid: str, body: PayIn, user=Depends(require(*STAFF))):
 
 
 # ---------- Returns ----------
-class ReturnItem(BaseModel):
-    item_id: str
-    qty: int = Field(ge=1)
-    condition: str
-
-
 class ReturnIn(BaseModel):
     items: list[ReturnItem] = []
     refund_amount: int = Field(default=0, ge=0)
@@ -565,6 +582,8 @@ async def tx_return(kind: str, tid: str, body: ReturnIn, user=Depends(require(*M
     doc = await load(kind, tid)
     if kind == "job" and doc["status"] != "Selesai":
         raise HTTPException(400, "Retur hanya untuk nota Selesai")
+    if kind == "order" and doc["ship_status"] == "Baru":
+        raise HTTPException(400, "Pesanan belum dikirim. Gunakan Batalkan pesanan.")
     if any(i.condition == "belum_kembali" for i in body.items):
         raise HTTPException(400, "Pada retur, catat hanya barang yang benar-benar kembali (layak/rusak)")
     await process_return(kind, doc, body, user)
@@ -783,9 +802,9 @@ async def cancel_order(oid: str, body: CancelIn, user=Depends(require("owner")))
     out = outstanding(doc)
     req = {}
     for i in body.items:
-        if i.get("condition") not in RETURN_CONDITIONS or int(i.get("qty") or 0) < 1:
+        if i.condition not in RETURN_CONDITIONS:
             raise HTTPException(400, "Setiap barang harus berstatus layak, rusak, atau belum_kembali dengan jumlah ≥ 1")
-        req[i["item_id"]] = req.get(i["item_id"], 0) + int(i["qty"])
+        req[i.item_id] = req.get(i.item_id, 0) + i.qty
     if req != out:
         names = {x["id"]: x["name"] for x in await find_list("items", {"id": {"$in": list(set(out) | set(req))}})}
         diff = ", ".join(f"{names.get(k, k)}: keluar {out.get(k, 0)}, dicatat {req.get(k, 0)}" for k in sorted(set(out) | set(req))
@@ -796,7 +815,7 @@ async def cancel_order(oid: str, body: CancelIn, user=Depends(require("owner")))
         raise HTTPException(409, "Pesanan sedang diproses. Muat ulang lalu coba lagi.")
     try:
         if doc.get("stock_applied"):
-            items = [ReturnItem(**i) for i in body.items]
+            items = list(body.items)
             await process_return("order", doc, ReturnIn(items=items, refund_amount=body.refund_amount, refund_method=body.refund_method,
                                                         reason=f"Batal: {body.reason}", idem_key=body.idem_key), user)
         elif body.refund_amount:
@@ -806,11 +825,11 @@ async def cancel_order(oid: str, body: CancelIn, user=Depends(require("owner")))
     finally:
         await db.orders.update_one({"id": oid}, {"$set": {"lock": False}})
     doc = await load("order", oid)
-    not_back = [{"item_id": i["item_id"], "qty": int(i["qty"])} for i in body.items if i["condition"] == "belum_kembali"]
+    not_back = [{"item_id": i.item_id, "qty": i.qty} for i in body.items if i.condition == "belum_kembali"]
     await db.orders.update_one({"id": oid}, {"$set": {"ship_status": "Batal", "cancel": {
         "reason": body.reason, "refund": body.refund_amount, "kept": doc["paid"] - doc["refunded"], "by": user["name"], "at": iso(),
-        "date_local": local_date(), "items": body.items, "items_not_returned": not_back}}})
-    await audit(user, "batal_pesanan", "order", oid, after={"refund": body.refund_amount, "items": body.items}, reason=body.reason)
+        "date_local": local_date(), "items": [i.model_dump() for i in body.items], "items_not_returned": not_back}}})
+    await audit(user, "batal_pesanan", "order", oid, after={"refund": body.refund_amount, "items": [i.model_dump() for i in body.items]}, reason=body.reason)
     return await with_extras("order", await load("order", oid), user)
 
 

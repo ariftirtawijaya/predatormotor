@@ -60,7 +60,7 @@ export default function OrderDetail() {
             {o.ship_status === "Baru" && isOwner(user) && <Btn v="danger" onClick={() => setModal("cancel")} data-testid="order-cancel-button">Batalkan pesanan</Btn>}
             {["Dikirim", "Diterima", "Diambil"].includes(o.ship_status) && isManager(user) && <Btn v="outline" onClick={() => setModal("return")} data-testid="order-return-button">Paket kembali / retur</Btn>}
           </div>
-          {o.cancel && <p className="text-sm" data-testid="order-cancel-info">Dibatalkan {o.cancel.by}: {o.cancel.reason} · refund {rp(o.cancel.refund)}</p>}
+          {o.cancel && <p className="text-sm" data-testid="order-cancel-info">Dibatalkan {o.cancel.by}: {o.cancel.reason} · refund {rp(o.cancel.refund)}{!!o.cancel.items_not_returned?.length && ` · saat batal ${o.cancel.items_not_returned.reduce((s, i) => s + i.qty, 0)} pcs belum kembali`}</p>}
           {["Batal", "Kembali"].includes(o.ship_status) && !!o.outstanding_items?.length && (
             <Card title="Barang belum kembali ke bengkel" data-testid="order-outstanding">
               {o.outstanding_items.map((i) => <p key={i.item_id} className="text-sm text-amber-900">{i.name}: {i.qty} pcs</p>)}
