@@ -142,7 +142,7 @@ export function Totals({ doc }) {
       <R l="Total" v={rp(doc.total)} b t="total-grand" />
       <R l="Dibayar" v={rp(doc.paid)} t="total-paid" />
       {!!doc.refunded && <R l="Dikembalikan" v={rp(doc.refunded)} t="total-refunded" />}
-      <R l="Sisa" v={rp(rem)} b t="total-remaining" />
+      <R l="Sisa" v={doc.status === "Batal" || doc.ship_status === "Batal" ? "— (batal)" : rp(rem)} b t="total-remaining" />
     </div>
   );
 }

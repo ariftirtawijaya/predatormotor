@@ -32,7 +32,7 @@ export default function OrderDetail() {
               {o.address && <p className="sm:col-span-2">{o.address}</p>}
               {o.notes && <p className="sm:col-span-2 text-slate-600">Catatan: {o.notes}</p>}
               <p>Resi: <b data-testid="order-resi">{o.resi || "-"}</b></p>
-              <p>Stok: <b data-testid="order-stock-status">{o.stock_applied ? "sudah dikurangi" : "belum dikurangi"}</b></p>
+              <p>Stok: <b data-testid="order-stock-status">{o.ship_status === "Batal" && o.stock_applied ? "dipotong, lalu diproses saat batal (lihat riwayat retur)" : o.stock_applied ? "sudah dikurangi" : "belum dikurangi"}</b></p>
               {!cod && o.paid >= o.total && o.total > 0 && !o.stock_applied && <p className="sm:col-span-2 font-semibold text-red-700" data-testid="order-stock-pending">Pembayaran lunas tetapi stok belum terpotong — tambah stok lalu tekan Kirim/Diambil untuk memotong stok.</p>}
               {cod && <p className="sm:col-span-2">Dana COD: <b data-testid="order-cod-status">{o.cod_settled ? "sudah cair" : o.stock_applied ? "belum cair" : "paket belum dikirim"}</b></p>}
             </div>
