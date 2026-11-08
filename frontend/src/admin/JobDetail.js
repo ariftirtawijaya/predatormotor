@@ -129,7 +129,7 @@ export default function JobDetail() {
         <div className="space-y-4">
           <Card title="Total"><Totals doc={job} /></Card>
           {open && (
-            <Btn v="success" className="h-12 w-full text-base" disabled={busy} onClick={complete} data-testid="job-complete-button"><CheckCircle2 className="h-5 w-5" />Tandai Selesai</Btn>
+            <Btn v="success" className="h-12 w-full text-base" disabled={busy || (job.kind !== "garansi" && !job.lines.some((l) => !l.removed))} onClick={complete} data-testid="job-complete-button"><CheckCircle2 className="h-5 w-5" />Tandai Selesai</Btn>
           )}
           <Card title="Diskon"><DiscountBox kind="job" doc={job} onDone={setJob} editable={open} /></Card>
           {job.status !== "Batal" && <Card title={open ? "Pembayaran / DP" : "Pelunasan"}><PaymentBox kind="job" doc={job} onDone={setJob} /></Card>}

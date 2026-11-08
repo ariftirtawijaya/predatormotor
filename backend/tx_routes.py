@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
-from core import (db, iso, new_id, local_date, token, find_list, get_or_404, require, audit, strip_cost, norm_phone,
+from core import (db, iso, new_id, local_date, token, find_list, get_or_404, require, audit, strip_cost, norm_phone, norm_plate,
                   next_number, move_many, add_payment, record_damage, recompute_paid, COLL, STAFF, MANAGERS)
 from master_routes import upsert_customer, upsert_vehicle, JAVA
 
@@ -70,10 +70,16 @@ def usage(doc):
     return [(c["item_id"], -c["qty"] * l["qty"]) for l in doc.get("lines", []) if not l.get("removed") for c in l["components"]]
 
 
-async def save_totals(kind, doc):
+async def save_totals(kind, doc, write_lines=False):
     t = totals(doc)
-    await db[COLL[kind]].update_one({"id": doc["id"]}, {"$set": t | {"lines": doc["lines"]}})
+    await db[COLL[kind]].update_one({"id": doc["id"]}, {"$set": t | ({"lines": doc["lines"]} if write_lines else {})})
     return t
+
+
+async def set_line(jid, line):
+    await db.jobs.update_one({"id": jid, "status": "Masuk"}, {"$set": {"lines.$[l]": line}}, array_filters=[{"l.lid": line["lid"]}])
+    doc = await load("job", jid)
+    await save_totals("job", doc)
 
 
 async def load(kind, id_):
@@ -134,12 +140,14 @@ async def create_job_doc(kind, customer, vehicle, user, complaint="", notes="", 
 
 @router.post("/jobs")
 async def create_job(body: JobIn, user=Depends(require(*STAFF))):
+    if body.vehicle and not body.vehicle.get("id") and await db.vehicles.find_one({"plate": norm_plate(body.vehicle.get("plate"))}):
+        raise HTTPException(409, "Plat sudah terdaftar. Cari dan pilih kendaraan tersebut dari pencarian pelanggan lama.")
     c = await upsert_customer(body.customer)
     v = await upsert_vehicle(body.vehicle, c["id"]) if body.vehicle else None
     lines = [await build_line(l, user) for l in body.lines]
     d = await create_job_doc("servis", c, v, user, body.complaint, body.notes, body.photos)
     d["lines"] = lines
-    await save_totals("job", d)
+    await save_totals("job", d, True)
     await audit(user, "buat_nota_pekerjaan", "job", d["id"], after={"no": d["no"]})
     return await with_extras("job", await load("job", d["id"]), user)
 
@@ -203,7 +211,7 @@ async def edit_job_line(jid: str, lid: str, body: LineEdit, user=Depends(require
         line["unit_price"] = body.unit_price
     line["subtotal"] = line["qty"] * line["unit_price"]
     line["edited_by"] = user["name"]
-    await save_totals("job", doc)
+    await set_line(jid, line)
     await audit(user, "ubah_baris", "job", jid, before=before | {"name": line["name"]},
                 after={"qty": line["qty"], "unit_price": line["unit_price"]}, reason=body.reason)
     return await with_extras("job", await load("job", jid), user)
@@ -221,7 +229,7 @@ async def remove_job_line(jid: str, lid: str, body: ReasonIn, user=Depends(requi
     if not line:
         raise HTTPException(404, "Baris tidak ditemukan")
     line.update(removed=True, removed_by=user["name"], removed_at=iso(), removed_reason=body.reason)
-    await save_totals("job", doc)
+    await set_line(jid, line)
     await audit(user, "hapus_baris", "job", jid, before={"name": line["name"], "qty": line["qty"], "price": line["unit_price"]}, reason=body.reason)
     return await with_extras("job", await load("job", jid), user)
 
@@ -304,7 +312,7 @@ async def create_claim(body: ClaimIn, user=Depends(require(*STAFF))):
     if body.ref_type not in ("job", "sale", "order"):
         raise HTTPException(400, "Referensi tidak valid")
     orig = await load(body.ref_type, body.ref_id)
-    line = next((l for l in orig["lines"] if l["lid"] == body.line_lid), None)
+    line = next((l for l in orig["lines"] if l["lid"] == body.line_lid and not l.get("removed")), None)
     if not line:
         raise HTTPException(404, "Item nota awal tidak ditemukan")
     if not orig.get("recognized"):
@@ -350,6 +358,8 @@ async def request_discount(kind: str, tid: str, body: DiscountIn, user=Depends(r
     discountable(kind, doc)
     if body.amount > doc["subtotal"]:
         raise HTTPException(400, "Diskon melebihi subtotal")
+    if totals(doc | {"discount": {"amount": body.amount, "status": "approved"}})["total"] < doc["paid"]:
+        raise HTTPException(400, "Total setelah diskon lebih kecil dari uang yang sudah dibayar")
     owner = user["role"] == "owner"
     disc = {"amount": body.amount, "reason": body.reason, "status": "approved" if owner else "pending",
             "requested_by": user["name"], "requested_at": iso(), "decided_by": user["name"] if owner else None,
@@ -373,6 +383,8 @@ async def decide_discount(kind: str, tid: str, body: DecideIn, user=Depends(requ
     if disc.get("status") != "pending":
         raise HTTPException(400, "Tidak ada diskon yang menunggu persetujuan")
     discountable(kind, doc)
+    if body.approve and totals(doc | {"discount": disc | {"status": "approved"}})["total"] < doc["paid"]:
+        raise HTTPException(400, "Total setelah diskon lebih kecil dari uang yang sudah dibayar")
     disc.update(status="approved" if body.approve else "rejected", decided_by=user["name"], decided_at=iso(), decision_note=body.note)
     doc["discount"] = disc
     await db[COLL[kind]].update_one({"id": tid}, {"$set": {"discount": disc}})
@@ -489,7 +501,12 @@ async def process_return(kind, doc, body, user):
                                 user, False, kind, doc["id"], doc["no"], "rusak")
     if body.refund_amount:
         await add_payment(kind, doc, body.refund_amount, body.refund_method, "refund", user, None, f"Retur: {body.reason}", "out")
+    write_off = 0
+    if kind == "order" and body.items and doc["payment_type"] == "cod" and not doc.get("cod_settled"):
+        write_off = max(doc["total"] - doc["paid"], 0)
+        await db.orders.update_one({"id": doc["id"]}, {"$set": {"written_off": write_off}})
     rec = {"id": new_id(), "items": [i.model_dump() | {"name": names.get(i.item_id)} for i in body.items], "refund": body.refund_amount,
+           "write_off": write_off,
            "refund_method": body.refund_method, "reason": body.reason, "by": user["name"], "at": iso(), "date_local": local_date(),
            "idem_key": body.idem_key}
     await db[COLL[kind]].update_one({"id": doc["id"]}, {"$push": {"returns": rec}})
@@ -667,8 +684,7 @@ async def patch_order(oid: str, body: OrderPatch, user=Depends(require(*STAFF)))
         doc["lines"] = [await build_line(l, user) for l in body.lines]
     doc |= upd
     await db.orders.update_one({"id": oid}, {"$set": upd})
-    await save_totals("order", doc)
-    await db.orders.update_one({"id": oid}, {"$set": {"total": totals(doc)["total"]}})
+    await save_totals("order", doc, body.lines is not None)
     await audit(user, "ubah_pesanan_wa", "order", oid, after={k: v for k, v in upd.items()} | ({"lines": "diganti"} if body.lines else {}))
     return await with_extras("order", await load("order", oid), user)
 

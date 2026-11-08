@@ -185,6 +185,8 @@ async def upsert_vehicle(v: dict, customer_id: str):
         raise HTTPException(400, "Plat nomor wajib diisi")
     ex = await db.vehicles.find_one({"plate": plate}, {"_id": 0})
     if ex:
+        if ex["customer_id"] != customer_id:
+            raise HTTPException(409, f"Plat {plate} sudah terdaftar atas pelanggan lain. Pilih kendaraan dari pencarian.")
         return ex
     d = {"id": new_id(), "customer_id": customer_id, "plate": plate, "brand": (v.get("brand") or "")[:40],
          "model": (v.get("model") or "")[:60], "year": (v.get("year") or "")[:4], "color": (v.get("color") or "")[:20], "created_at": iso()}

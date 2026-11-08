@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Printer, Send, Trash2, Pencil } from "lucide-react";
 import { api, errMsg, newKey } from "@/lib/api";
@@ -152,6 +152,7 @@ export function PaymentBox({ kind, doc, onDone, cod }) {
   const [f, setF] = useState({ amount: "", method: cod ? "cod" : "tunai", note: "" });
   const [key, setKey] = useState(newKey());
   const [busy, setBusy] = useState(false);
+  if (doc.total <= 0) return <p className="text-sm text-slate-500" data-testid="payment-no-bill">Belum ada tagihan.</p>;
   if (rem <= 0) return <p className="text-sm font-semibold text-emerald-700" data-testid="payment-paid-full">Lunas</p>;
   const submit = async () => {
     setBusy(true);
@@ -199,6 +200,7 @@ export function DiscountBox({ kind, doc, onDone, editable }) {
   const decide = async (approve) => { const r = await act(() => api.post(`/tx/${kind}/${doc.id}/discount/decide`, { approve }), approve ? "Diskon disetujui" : "Diskon ditolak"); r && onDone(r); };
   return (
     <div className="space-y-2 text-sm" data-testid="discount-box">
+      {!d && !editable && <p className="text-slate-500">Tidak ada diskon.</p>}
       {d && <p data-testid="discount-status">Diskon {rp(d.amount)} — <b>{{ approved: "disetujui", pending: "menunggu persetujuan owner", rejected: "ditolak" }[d.status]}</b> · diajukan {d.requested_by}{d.decided_by && ` · diputuskan ${d.decided_by}`} · {d.reason}</p>}
       {d?.status === "pending" && isOwner(user) && (
         <div className="flex gap-2"><Btn v="success" size="sm" onClick={() => decide(true)} data-testid="discount-approve">Setujui</Btn><Btn v="danger" size="sm" onClick={() => decide(false)} data-testid="discount-reject">Tolak</Btn></div>
@@ -260,12 +262,13 @@ export function ReturnDialog({ kind, doc, open, onClose, onDone, title = "Retur 
 }
 
 export function NotaActions({ kind, doc, shopName }) {
+  const nav = useNavigate();
   const phone = doc.customer?.phone || doc.customer_phone;
   return (
     <div className="flex flex-wrap gap-2">
-      <Link to={`/admin/cetak/${kind}/${doc.id}?size=80`}><Btn v="outline" size="sm" data-testid="nota-print-80"><Printer className="h-4 w-4" />Cetak 80mm</Btn></Link>
-      <Link to={`/admin/cetak/${kind}/${doc.id}?size=a4`}><Btn v="outline" size="sm" data-testid="nota-print-a4"><Printer className="h-4 w-4" />A4</Btn></Link>
-      {phone && <a href={waLink(phone, notaText(doc, kind, shopName))} target="_blank" rel="noreferrer"><Btn v="success" size="sm" data-testid="nota-send-wa"><Send className="h-4 w-4" />Kirim via WhatsApp</Btn></a>}
+      <Btn v="outline" size="sm" onClick={() => nav(`/admin/cetak/${kind}/${doc.id}?size=80`)} data-testid="nota-print-80"><Printer className="h-4 w-4" />Cetak 80mm</Btn>
+      <Btn v="outline" size="sm" onClick={() => nav(`/admin/cetak/${kind}/${doc.id}?size=a4`)} data-testid="nota-print-a4"><Printer className="h-4 w-4" />A4</Btn>
+      {phone && <Btn v="success" size="sm" onClick={() => window.open(waLink(phone, notaText(doc, kind, shopName)), "_blank", "noopener")} data-testid="nota-send-wa"><Send className="h-4 w-4" />Kirim via WhatsApp</Btn>}
     </div>
   );
 }

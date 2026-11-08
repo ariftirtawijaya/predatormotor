@@ -71,16 +71,23 @@ async def summary(start: str, end: str, user=Depends(require("owner"))):
     for p in pays:
         daily_rows[p["date_local"]]["uang_masuk" if p["direction"] == "in" else "uang_keluar"] += p["amount"]
     ret_hpp_back = 0
+    ret_refund = 0
+    write_off = 0
     returns = []
     for kind, coll in (("job", "jobs"), ("sale", "sales"), ("order", "orders")):
         for d in await find_list(coll, {"returns.date_local": rng(start, end)}, limit=5000):
             for r in d["returns"]:
                 if start <= r["date_local"] <= end:
                     ret_hpp_back += sum(costs.get(i["item_id"], 0) * i["qty"] for i in r["items"] if i["condition"] == "layak")
+                    ret_refund += r["refund"]
+                    write_off += r.get("write_off", 0)
                     returns.append({"kind": kind, "id": d["id"], "no": d["no"], "date": r["date_local"], "refund": r["refund"],
-                                    "reason": r["reason"], "items": r["items"]})
+                                    "write_off": r.get("write_off", 0), "reason": r["reason"], "items": r["items"]})
     res["returns"] = returns
     res["return_hpp_back"] = ret_hpp_back
+    res["return_refund"] = ret_refund
+    res["write_off"] = write_off
+    res["net_revenue"] = res["omzet_total"] - ret_refund - write_off
     kept = 0
     cancels = []
     for kind, coll in (("job", "jobs"), ("order", "orders")):
@@ -102,7 +109,7 @@ async def summary(start: str, end: str, user=Depends(require("owner"))):
     res["damage_loss"] = sum(costs.get(d["item_id"], 0) * d["qty"] for d in dmg if d["source"] == "stok")
     internal = await find_list("stock_mutations", {"kind": "pemakaian_internal", "date_local": rng(start, end)}, limit=20000)
     res["internal_use_cost"] = sum(costs.get(m["item_id"], 0) * -m["delta"] for m in internal)
-    res["gross_profit"] = res["omzet_total"] - res["refund_total"] - (res["hpp"] - ret_hpp_back)
+    res["gross_profit"] = res["net_revenue"] - (res["hpp"] - ret_hpp_back)
     res["net_profit"] = res["gross_profit"] - res["expense_total"] - res["damage_loss"] - res["internal_use_cost"] + kept
     res["missing_cost_items"] = await db.items.count_documents({"active": True, "cost": {"$in": [0, None]}})
     res["daily"] = [{"date": k} | dict(v) for k, v in sorted(daily_rows.items())]

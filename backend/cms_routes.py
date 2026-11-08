@@ -10,7 +10,7 @@ from core import (db, iso, new_id, find_list, require, audit, current_user, clea
 router = APIRouter(prefix="/api")
 KEYS = ["identity", "navigation", "home", "profile", "services", "catalog", "gallery", "contact", "footer", "seo", "pages"]
 MAX_MB = int(os.environ.get("MAX_UPLOAD_MB", "5"))
-URL_KEYS = ("href", "url", "link", "map_url", "map_link", "cta_link", "cta2_link")
+URL_RE = re.compile(r"(href|link|url|_image|^image|logo|favicon|photo)$", re.I)
 SAFE_URL = re.compile(r"^(https?://|/|#|mailto:|tel:)", re.I)
 TAG = re.compile(r"<[^>]*>")
 
@@ -75,7 +75,7 @@ def sanitize(v, key=""):
         return [sanitize(x, key) for x in v]
     if isinstance(v, str):
         v = TAG.sub("", v)[:6000].strip()
-        if key in URL_KEYS and v and not SAFE_URL.match(v):
+        if URL_RE.search(key) and v and not SAFE_URL.match(v):
             raise HTTPException(400, f"Tautan tidak aman/tidak valid: {v[:60]}")
         if key == "map_embed" and v and not v.startswith("https://"):
             raise HTTPException(400, "Tautan embed peta harus https://")

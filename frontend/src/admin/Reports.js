@@ -27,7 +27,7 @@ export default function Reports() {
               <Stat label="Penjualan langsung" value={rp(d.omzet.sale)} sub={`${d.count.sale} transaksi`} testid="rep-omzet-sale" />
               <Stat label="Pesanan WA" value={rp(d.omzet.order)} sub={`${d.count.order} pesanan · ongkir ${rp(d.shipping)} terpisah`} testid="rep-omzet-order" />
               <Stat label="Total omzet" value={rp(d.omzet_total)} sub={`setelah diskon ${rp(d.discount)}`} tone="border-sky-300 bg-sky-50" testid="rep-omzet-total" />
-              <Stat label="Pengembalian uang" value={rp(d.refund_total)} sub={`${d.returns.length} retur · ${d.cancels.length} batal`} testid="rep-refunds" />
+              <Stat label="Retur (refund + COD batal)" value={rp(d.return_refund + d.write_off)} sub={`${d.returns.length} retur · omzet bersih ${rp(d.net_revenue)}`} testid="rep-refunds" />
             </div>
           </div>
           <div>
@@ -37,7 +37,7 @@ export default function Reports() {
               <Stat label="Transfer" value={rp(d.received.transfer)} testid="rep-transfer" />
               <Stat label="COD cair" value={rp(d.received.cod)} testid="rep-cod-received" />
               <Stat label="DP diterima (periode)" value={rp(d.dp_received)} testid="rep-dp" />
-              <Stat label="Kas bersih (masuk − keluar)" value={rp(d.net_cash)} tone="border-emerald-300 bg-emerald-50" testid="rep-net-cash" />
+              <Stat label="Kas bersih (masuk − keluar)" value={rp(d.net_cash)} sub={`uang keluar/refund ${rp(d.refund_total)}`} tone="border-emerald-300 bg-emerald-50" testid="rep-net-cash" />
             </div>
           </div>
           <div>
@@ -60,7 +60,8 @@ export default function Reports() {
             </div>
             <div className="mt-3 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700" data-testid="rep-definitions">
               <p><b>Omzet</b> = total nota pekerjaan yang Selesai + penjualan langsung + pesanan WA yang barangnya sudah keluar (tanpa ongkir), setelah diskon. Pembayaran bertahap (DP & pelunasan) tidak menggandakan omzet.</p>
-              <p className="mt-1"><b>Laba kotor</b> = Omzet − Pengembalian uang − (HPP − modal barang retur yang kembali layak jual). HPP memakai modal yang tersimpan pada nota saat transaksi.</p>
+              <p className="mt-1"><b>Omzet bersih</b> = Omzet − uang yang dikembalikan karena retur − tagihan COD yang batal karena paket kembali. Pengembalian DP dari pembatalan nota yang belum selesai tidak mengurangi omzet (karena memang belum pernah dihitung).</p>
+              <p className="mt-1"><b>Laba kotor</b> = Omzet bersih − (HPP − modal barang retur yang kembali layak jual). HPP memakai modal yang tersimpan pada nota saat transaksi.</p>
               <p className="mt-1"><b>Laba bersih</b> = Laba kotor − Biaya operasional − Modal barang rusak dari stok − Modal pemakaian internal + DP yang ditahan dari pembatalan. Tidak termasuk biaya sewa (tempat milik sendiri).</p>
               <p className="mt-1 text-amber-800">Laba bersih hanya akurat bila modal barang dan seluruh biaya dicatat lengkap.{d.missing_cost_items > 0 && ` Saat ini ada ${d.missing_cost_items} barang aktif tanpa modal.`}</p>
             </div>
