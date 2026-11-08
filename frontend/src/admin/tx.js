@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Printer, Send, Trash2, Pencil } from "lucide-react";
+import { Printer, Trash2, Pencil } from "lucide-react";
 import { api, errMsg, newKey } from "@/lib/api";
-import { rp, fmtDateTime, fmtDate, waLink, notaText } from "@/lib/fmt";
+import { rp, fmtDateTime, fmtDate } from "@/lib/fmt";
 import { useAuth, isManager, isOwner } from "@/context/AuthContext";
 import { Btn, Field, Input, NumInput, Select, Card, Table, Td, Modal, Badge } from "@/admin/ui";
+import { SendNotaWA } from "@/admin/WaNota";
 
 export function useLoad(url) {
   const [data, setData] = useState(null);
@@ -272,14 +273,13 @@ export function ReturnDialog({ kind, doc, open, onClose, onDone, title = "Retur 
   );
 }
 
-export function NotaActions({ kind, doc, shopName }) {
+export function NotaActions({ kind, doc }) {
   const nav = useNavigate();
-  const phone = doc.customer?.phone || doc.customer_phone;
   return (
     <div className="flex flex-wrap gap-2">
       <Btn v="outline" size="sm" onClick={() => nav(`/admin/cetak/${kind}/${doc.id}?size=80`)} data-testid="nota-print-80"><Printer className="h-4 w-4" />Cetak 80mm</Btn>
       <Btn v="outline" size="sm" onClick={() => nav(`/admin/cetak/${kind}/${doc.id}?size=a4`)} data-testid="nota-print-a4"><Printer className="h-4 w-4" />A4</Btn>
-      {phone && <Btn v="success" size="sm" onClick={() => window.open(waLink(phone, notaText(doc, kind, shopName)), "_blank", "noopener")} data-testid="nota-send-wa"><Send className="h-4 w-4" />Kirim via WhatsApp</Btn>}
+      <SendNotaWA kind={kind} doc={doc} />
     </div>
   );
 }

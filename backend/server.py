@@ -10,13 +10,14 @@ import cms_routes
 import master_routes
 import tx_routes
 import report_routes
+import wa_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("predator")
 
 app = FastAPI(title="Predator Autolight API", docs_url=None if os.environ.get("DISABLE_DOCS") == "true" else "/api/docs",
               openapi_url="/api/openapi.json")
-for r in (auth_routes, cms_routes, master_routes, tx_routes, report_routes):
+for r in (auth_routes, cms_routes, master_routes, tx_routes, report_routes, wa_routes):
     app.include_router(r.router)
 
 ORIGINS = [o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()]
@@ -57,6 +58,10 @@ INDEXES = {
     "expenses": [IndexModel([("date", ASCENDING)])],
     "audit_logs": [IndexModel([("created_at", DESCENDING)])],
     "counters": [IndexModel([("key", ASCENDING)], unique=True)],
+    "settings": [IndexModel([("key", ASCENDING)], unique=True)],
+    "wa_logs": [IndexModel([("send_key", ASCENDING)], unique=True), IndexModel([("ref_id", ASCENDING)]),
+                IndexModel([("created_at", DESCENDING)])],
+    "wa_locks": [IndexModel([("key", ASCENDING)], unique=True)],
 }
 
 

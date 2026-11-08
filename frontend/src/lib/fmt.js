@@ -25,14 +25,3 @@ export const waLink = (phone, text) => {
 
 export const KIND_LABEL = { job: "Pekerjaan", sale: "Penjualan", order: "Pesanan WA" };
 export const KIND_PATH = { job: "pekerjaan", sale: "penjualan", order: "pesanan" };
-
-export function notaText(doc, kind, shopName) {
-  const lines = (doc.lines || []).filter((l) => !l.removed);
-  const rows = lines.map((l) => `- ${l.name}${l.qty > 1 ? ` x${l.qty}` : ""}: ${rp(l.subtotal)}`).join("\n");
-  const link = doc.public_token ? `\nLihat nota: ${window.location.origin}/nota/${doc.public_token}` : "";
-  const remaining = Math.max((doc.total || 0) - (doc.paid || 0), 0);
-  return `${shopName || "Predator Autolight"}\nNota ${doc.no} (${KIND_LABEL[kind]})\n${rows}` +
-    (doc.discount_amount ? `\nDiskon: -${rp(doc.discount_amount)}` : "") +
-    (doc.shipping_cost ? `\nOngkir: ${rp(doc.shipping_cost)}` : "") +
-    `\nTotal: ${rp(doc.total)}\nDibayar: ${rp(doc.paid)}` + (remaining ? `\nSisa: ${rp(remaining)}` : "") + link;
-}

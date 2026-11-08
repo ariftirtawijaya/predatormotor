@@ -58,7 +58,7 @@ export const CMS_SCHEMA = {
       { k: "consent", label: "Pelanggan mengizinkan publikasi", type: "toggle" }, { k: "plate_masked", label: "Plat nomor sudah disamarkan / tidak terlihat", type: "toggle" },
       { k: "visible", label: "Tampil di website", type: "toggle" }] }] },
   contact: { label: "Kontak", fields: [
-    { k: "whatsapp", label: "Nomor WhatsApp tujuan", type: "text", hint: "Format 62812xxxx. Kosongkan untuk menyembunyikan tombol WA." },
+    { k: "whatsapp", label: "Nomor WhatsApp tujuan", type: "readonly", hint: "Diubah oleh owner di menu Pengaturan · WhatsApp (tetap lewat draft → pratinjau → terbitkan)." },
     { k: "wa_message", label: "Pesan awal WhatsApp", type: "textarea" }, { k: "address", label: "Alamat", type: "textarea" },
     { k: "phone", label: "Telepon", type: "text" }, { k: "email", label: "Email", type: "text" },
     { k: "hours", label: "Jam operasional", type: "list", itemLabel: "day", fields: [{ k: "day", label: "Hari", type: "text" }, { k: "time", label: "Jam", type: "text" }] },

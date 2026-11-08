@@ -104,6 +104,14 @@ def meta(d):
             "has_changes": d["draft"] != d["published"]}
 
 
+async def keep_wa(key, data):
+    # Nomor WA admin hanya diubah lewat Pengaturan → WhatsApp (owner), agar hanya ada satu sumber nomor.
+    if key == "contact":
+        cur = await db.cms.find_one({"key": "contact"})
+        data = {**data, "whatsapp": cur["draft"].get("whatsapp", "")}
+    return data
+
+
 class DraftIn(BaseModel):
     data: dict
 
@@ -117,7 +125,7 @@ async def cms_all(user=Depends(require(*MANAGERS))):
 async def cms_save(key: str, body: DraftIn, user=Depends(require(*MANAGERS))):
     if key not in KEYS:
         raise HTTPException(404, "Bagian tidak dikenal")
-    data = sanitize(body.data)
+    data = await keep_wa(key, sanitize(body.data))
     await db.cms.update_one({"key": key}, {"$set": {"draft": data, "updated_at": iso(), "updated_by": user["name"]}})
     await db.cms_revisions.insert_one({"id": new_id(), "key": key, "kind": "draft", "data": data,
                                        "user_name": user["name"], "user_id": user["id"], "created_at": iso()})
@@ -167,7 +175,7 @@ async def cms_restore(rid: str, user=Depends(require(*MANAGERS))):
     r = await db.cms_revisions.find_one({"id": rid})
     if not r:
         raise HTTPException(404, "Revisi tidak ditemukan")
-    await db.cms.update_one({"key": r["key"]}, {"$set": {"draft": r["data"], "updated_at": iso(), "updated_by": user["name"]}})
+    await db.cms.update_one({"key": r["key"]}, {"$set": {"draft": await keep_wa(r["key"], r["data"]), "updated_at": iso(), "updated_by": user["name"]}})
     await audit(user, "pulihkan_revisi_cms", "cms", r["key"], reason=f"revisi {r['created_at']}")
     return meta(await db.cms.find_one({"key": r["key"]}))
 

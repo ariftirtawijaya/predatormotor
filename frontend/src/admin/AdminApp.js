@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Routes, Route, NavLink, Navigate, useNavigate } from "react-router-dom";
 import { LayoutDashboard, ShoppingCart, Wrench, MessageCircle, Car, Receipt, Package, Boxes, ArrowLeftRight, AlertTriangle,
-  Wallet, Globe, Image, BadgePercent, BarChart3, Users, ScrollText, Menu, X, LogOut } from "lucide-react";
+  Wallet, Globe, Image, BadgePercent, BarChart3, Users, ScrollText, Menu, X, LogOut, Settings } from "lucide-react";
 import { useAuth, isManager, isOwner } from "@/context/AuthContext";
 import Login from "@/admin/Login";
 import Dashboard from "@/admin/Dashboard";
@@ -20,6 +20,7 @@ import { Discounts, UsersPage, AuditPage } from "@/admin/OwnerPages";
 import CMS from "@/admin/CMS";
 import MediaLibrary from "@/admin/MediaLibrary";
 import PrintPage from "@/admin/PrintPage";
+import WhatsAppSettings from "@/admin/WhatsAppSettings";
 
 const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -39,6 +40,7 @@ const NAV = [
   { to: "/admin/laporan", label: "Laporan", icon: BarChart3, owner: true },
   { to: "/admin/pengguna", label: "Pengguna", icon: Users, owner: true },
   { to: "/admin/audit", label: "Audit Log", icon: ScrollText, owner: true },
+  { to: "/admin/pengaturan/whatsapp", label: "Pengaturan · WhatsApp", icon: Settings, owner: true },
 ];
 
 const ROLE = { owner: "Owner", admin: "Admin", kasir: "Kasir" };
@@ -121,6 +123,7 @@ export default function AdminApp() {
             <Route path="laporan" element={<Guard ok={isOwner(user)}><Reports /></Guard>} />
             <Route path="pengguna" element={<Guard ok={isOwner(user)}><UsersPage /></Guard>} />
             <Route path="audit" element={<Guard ok={isOwner(user)}><AuditPage /></Guard>} />
+            <Route path="pengaturan/whatsapp" element={<Guard ok={isOwner(user)}><WhatsAppSettings /></Guard>} />
             <Route path="*" element={<p>Halaman tidak ditemukan.</p>} />
           </Routes>
         </Shell>
