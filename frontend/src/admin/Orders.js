@@ -39,6 +39,7 @@ function CustomerPicker({ value, onPick }) {
   const [q, setQ] = useState("");
   const [res, setRes] = useState([]);
   const [nf, setNf] = useState(null);
+  const [dup, setDup] = useState(null);
   useEffect(() => {
     if (q.trim().length < 2) { setRes([]); return; }
     const t = setTimeout(() => api.get(`/customers?q=${encodeURIComponent(q)}`).then((r) => setRes(r.data.slice(0, 8))), 250);
@@ -46,7 +47,9 @@ function CustomerPicker({ value, onPick }) {
   }, [q]);
   const create = async () => {
     const r = await act(() => api.post("/customers", nf), "Pelanggan baru dibuat");
-    if (r) { onPick(r); setNf(null); }
+    if (r) { onPick(r); setNf(null); setDup(null); return; }
+    const ex = (await api.get(`/customers?q=${encodeURIComponent(nf.phone)}`)).data.find((c) => c.phone === normalizeWa(nf.phone));
+    setDup(ex || null);
   };
   if (value) return (
     <div className="flex items-start justify-between rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm" data-testid="order-customer-selected">
@@ -60,6 +63,7 @@ function CustomerPicker({ value, onPick }) {
         <Field label="Nama"><Input value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} data-testid="order-customer-name" /></Field>
         <Field label="No WhatsApp" hint={nf.phone && !normalizeWa(nf.phone) ? "Format 08…, 62…, atau +62…" : ""}><Input value={nf.phone} onChange={(e) => setNf({ ...nf, phone: e.target.value })} data-testid="order-customer-phone" /></Field>
       </div>
+      {dup && <p className="flex flex-wrap items-center gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-900" data-testid="order-customer-dup">Nomor ini sudah terdaftar atas <b>{dup.name}</b>.<Btn size="sm" v="outline" onClick={() => { onPick(dup); setNf(null); setDup(null); }} data-testid="order-customer-dup-pick">Pilih pelanggan ini</Btn></p>}
       <div className="flex gap-2"><Btn size="sm" disabled={!nf.name || !normalizeWa(nf.phone)} onClick={create} data-testid="order-customer-create">Simpan pelanggan</Btn><Btn size="sm" v="outline" onClick={() => setNf(null)}>Batal</Btn></div>
     </div>
   );

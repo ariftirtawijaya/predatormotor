@@ -22,6 +22,8 @@ export default function Receipt({ d, identity = {}, contact = {}, size = "80" })
       <div className="border-b border-dashed border-black py-2">
         {d.customer_name && <Row l="Pelanggan" r={d.customer_name} />}
         {d.plate && <Row l="Plat" r={d.plate} />}
+        {d.kind === "order" && d.delivery && <Row l="Pengiriman" r={d.delivery === "ambil" ? "Diambil di bengkel" : `${d.courier || "-"}${d.resi ? ` · resi ${d.resi}` : ""}`} />}
+        {d.kind === "order" && d.address && <Row l="Alamat" r={`${d.address}${d.province ? ` (${d.province})` : ""}`} />}
         {d.status && <Row l="Status" r={d.status} />}
       </div>
       {a4 ? (
@@ -51,7 +53,7 @@ export default function Receipt({ d, identity = {}, contact = {}, size = "80" })
         </div>
       )}
       <div className="space-y-0.5 py-2">
-        <Row l="Subtotal" r={rp(d.subtotal)} />
+        <Row l={d.kind === "order" ? "Harga barang" : "Subtotal"} r={rp(d.subtotal)} />
         {!!d.discount_amount && <Row l="Diskon (disetujui)" r={`-${rp(d.discount_amount)}`} />}
         {!!d.shipping_cost && (d.shipping_payer === "cod_kurir"
           ? <Row l={`Ongkir COD (dibayar ke kurir ${d.courier || "J&T"} saat diterima)`} r={rp(d.shipping_cost)} />
@@ -79,6 +81,6 @@ export function toReceipt(kind, doc) {
     status: doc.status === "proses" ? "" : doc.status || doc.ship_status, lines: (doc.lines || []).filter((l) => !l.removed),
     subtotal: doc.subtotal, discount_amount: doc.discount_amount, shipping_cost: doc.shipping_cost, total: doc.total, paid: doc.paid,
     refunded: doc.refunded, remaining: Math.max(doc.total - doc.paid, 0), change: doc.change, payments: doc.payments,
-    shipping_payer: doc.shipping_payer, courier: doc.courier,
+    shipping_payer: doc.shipping_payer, courier: doc.courier, delivery: doc.delivery, resi: doc.resi, address: doc.address, province: doc.province,
   };
 }

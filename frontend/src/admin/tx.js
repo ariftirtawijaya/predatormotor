@@ -31,15 +31,15 @@ export async function act(fn, ok) {
 export function ItemSearch({ onPick, testid = "item-search" }) {
   const [q, setQ] = useState("");
   const [items] = useLoad("/items?active_only=true");
-  const list = (items || []).filter((i) => !q || `${i.name} ${i.sku} ${i.brand} ${i.category}`.toLowerCase().includes(q.toLowerCase())).slice(0, 30);
+  const list = (items || []).filter((i) => !q || `${i.name} ${i.sku} ${i.brand} ${i.category} ${i.variant || ""}`.toLowerCase().includes(q.toLowerCase())).slice(0, 30);
   return (
     <div>
       <Input placeholder="Cari nama / SKU barang…" value={q} onChange={(e) => setQ(e.target.value)} data-testid={`${testid}-input`} />
       <div className="mt-2 max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200">
         {list.map((i) => (
-          <button key={i.id} type="button" onClick={() => onPick(i)} disabled={i.stock <= 0}
+          <button key={i.id} type="button" onClick={() => { onPick(i); setQ(""); }} disabled={i.stock <= 0}
             className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-sky-50 disabled:opacity-50" data-testid={`${testid}-result-${i.sku}`}>
-            <span><b>{i.name}</b> <span className="text-xs text-slate-500">{i.sku} {i.variant}</span></span>
+            <span><b>{i.name}</b> <span className="text-xs text-slate-500">{i.sku}</span></span>
             <span className="whitespace-nowrap text-right"><span className="font-mono-num">{rp(i.price)}</span><span className={`ml-2 text-xs ${i.stock <= (i.min_stock || 0) ? "text-red-700" : "text-slate-500"}`}>stok {i.stock}</span></span>
           </button>
         ))}

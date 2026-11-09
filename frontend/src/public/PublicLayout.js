@@ -64,6 +64,7 @@ function Nav({ site }) {
       {open && (
         <div className="border-t border-slate-200 bg-white px-5 py-4 lg:hidden" onClick={() => setOpen(false)}>
           {items.map((i, k) => <SLink key={k} href={i.href} className="block py-3 text-base font-medium text-slate-800" testid={`site-mnav-${k}`}>{i.label}</SLink>)}
+          {site.navigation.cta_label && <SLink href={site.navigation.cta_href} className="mt-3 flex justify-center rounded-full px-5 py-3 text-base font-bold accent-bg" testid="site-mnav-cta">{site.navigation.cta_label}</SLink>}
         </div>
       )}
     </header>

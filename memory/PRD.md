@@ -29,7 +29,16 @@ Owner (Mas Latif) — semua modul, laporan laba, persetujuan diskon, pembatalan,
 - `save_totals` kini bersyarat pada baris yang dibaca (memperbaiki total basi saat edit serentak, ditemukan tes paralel).
 - Tes: clone bersih 90/90 (5x berturut-turut), jest 4/4.
 
+### 2026-11-09 (Iterasi 7)
+- Situs publik mode terang (Home, Pages, PublicLayout); menu mobile z-index diperbaiki.
+- Reset Data khusus owner (`reset_routes.py`, `ResetData.js`) tanpa drop DB.
+- Order WA terhubung Master Pelanggan + snapshot nama/HP/alamat saat order.
+- COD hanya untuk ongkir; barang wajib lunas sebelum kirim.
+- Produk induk + varian (items) dan impor Excel via openpyxl (`catalog_routes.py`, `ItemImport.js`); kolom cari bisa dikosongkan.
+- Tes: backend 94/94, frontend testing agent 100% (iteration_7).
+
 ## Prioritized backlog
+- P1: Bantu deploy ke VPS milik owner (Docker Compose).
 - P0: Uji kirim nyata dengan token & perangkat Fonnte milik owner.
 - P1: Isi data asli via CMS (alamat, jam, logo, foto, layanan) — tugas konten owner.
 - P1: Server-side meta tags (SSR/prerender) untuk pratinjau tautan.
@@ -37,4 +46,4 @@ Owner (Mas Latif) — semua modul, laporan laba, persetujuan diskon, pembatalan,
 - P2: Pemilih tanggal berformat Indonesia; migrasi data lama; pecah tx_routes.py.
 
 ## Next tasks
-Owner mengisi token & nomor admin, kirim pesan percobaan ke nomor sendiri, lalu coba kirim satu nota.
+Owner mencoba iterasi 7 (varian, impor Excel, COD ongkir, reset data), lalu persiapan deploy VPS.
