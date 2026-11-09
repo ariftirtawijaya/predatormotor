@@ -43,7 +43,7 @@ Satu aplikasi: website publik (dikelola CMS) + dashboard internal (kasir, pekerj
 ```bash
 # MongoDB lokal berjalan di 27017
 cd backend
-cp .env.example .env     # isi JWT_SECRET (openssl rand -hex 32), MONGO_URL=mongodb://localhost:27017, UPLOAD_DIR=./uploads, CORS_ORIGINS=http://localhost:3000, COOKIE_SECURE=false
+cp .env.example .env     # isi JWT_SECRET (openssl rand -hex 32), MONGO_URL=mongodb://localhost:27017/?replicaSet=rs0 (mongod --replSet rs0 + rs.initiate(); tanpa replica set, simpan impor & hapus barang ditolak 503), UPLOAD_DIR=./uploads, CORS_ORIGINS=http://localhost:3000, COOKIE_SECURE=false
 pip install -r requirements-prod.txt
 uvicorn server:app --reload --port 8001
 

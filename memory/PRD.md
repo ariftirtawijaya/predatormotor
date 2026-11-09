@@ -46,6 +46,7 @@ Owner (Mas Latif) — semua modul, laporan laba, persetujuan diskon, pembatalan,
 - Tes: backend 114 passed pada replica set nyata (port 27018), standalone 109 passed + tes RS di-skip; frontend testing agent 100% (iteration_8) pada stack terisolasi localhost:3001/8002.
 
 ## Prioritized backlog
+- 2026-11-09 Review iterasi 8: docker-compose memaksa MONGO_URL replica set (backend/.env.example & README sama); paket ditolak bila komponen yang dipakai nonaktif (pesan sebut nama+SKU; LinePicker memberi peringatan & menonaktifkan tombol); hapus produk/varian + arsip + audit dalam satu transaksi (503 tanpa replica set) dengan uji kegagalan buatan `DELETE_TEST_FAIL_AT`. Tes: 122 passed di replica set; iteration_9 100%.
 - P0: Owner menjalankan `./scripts/test-replset.sh` di VPS lalu migrasi Docker ke replica set sebelum impor data asli.
 - P1: Ubah opsi paket lama (mode "Tambah barang") menjadi "Ganti komponen" bila memang upgrade.
 - P0: Uji kirim nyata dengan token & perangkat Fonnte milik owner.
