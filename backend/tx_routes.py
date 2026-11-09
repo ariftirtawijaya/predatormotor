@@ -52,7 +52,7 @@ async def build_line(inp: LineIn, user):
         for o in opts:
             o["replaces_name"] = items.get(o.get("replaces") or "", {}).get("name")
             o["items_names"] = [f"{items[c['item_id']]['name']} x{c['qty']}" for c in o["items"] if c["item_id"] in items]
-        base.update(name=p["name"], package_id=p["id"], detail=p.get("main_brand_model") or "",
+        base.update(name=p["name"], package_id=p["id"], detail="",
                     options=[{"name": o["name"], "price": o["price"], "mode": o.get("mode", "add"), "replaces_name": o.get("replaces_name"),
                               "items": o["items_names"]} for o in opts],
                     unit_price=p["price"] + sum(o["price"] for o in opts), warranty_days=p.get("warranty_days", 0),

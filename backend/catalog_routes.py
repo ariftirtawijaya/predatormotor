@@ -6,7 +6,7 @@ import hashlib
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from core import (db, client, iso, new_id, find_list, get_or_404, require, audit, strip_cost, move_stock, norm_text, text_key, norm_sku,
@@ -561,7 +561,7 @@ async def import_items(commit: bool = False, plan_hash_in: str = Query("", alias
     if not commit:
         return res
     if errors:
-        raise HTTPException(400, "Masih ada baris yang salah. Perbaiki file lalu pratinjau ulang.")
+        return JSONResponse({"detail": "Masih ada baris yang salah. Perbaiki file lalu pratinjau ulang. Tidak ada data yang disimpan.", "errors": errors}, 400)
     if not res["transactions_ready"]:
         raise HTTPException(503, "Penyimpanan impor membutuhkan MongoDB mode replica set (transaksi). Tidak ada data yang disimpan. Lihat README bagian Impor Excel.")
     if not plan_hash_in:
@@ -580,7 +580,7 @@ async def import_items(commit: bool = False, plan_hash_in: str = Query("", alias
         async with await client.start_session() as s:
             plan2 = await s.with_transaction(run)
     except ImportAbort as e:
-        raise HTTPException(e.code, e.msg)
+        return JSONResponse({"detail": e.msg, "errors": e.errors}, e.code)
     except HTTPException as e:
         raise HTTPException(409 if e.status_code == 400 else e.status_code, f"{e.detail}. Tidak ada data yang disimpan; pratinjau ulang.")
     except DuplicateKeyError:

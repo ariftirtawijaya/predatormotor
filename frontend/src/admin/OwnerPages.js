@@ -5,6 +5,7 @@ import { rp, fmtDateTime, KIND_LABEL, KIND_PATH } from "@/lib/fmt";
 import { Btn, Field, Input, Select, Card, Table, Td, PageHead, Badge } from "@/admin/ui";
 import { useLoad, act } from "@/admin/tx";
 import { DeleteDialog } from "@/admin/DeleteDialog";
+import { useAuth } from "@/context/AuthContext";
 import { Trash2 } from "lucide-react";
 
 export function Discounts() {
@@ -26,8 +27,10 @@ export function Discounts() {
 }
 
 export function UsersPage() {
+  const { user: me } = useAuth();
   const [rows, load] = useLoad("/users");
   const [del, setDel] = useState(null);
+  const lastOwner = (u) => u.role === "owner" && (rows || []).filter((x) => x.role === "owner" && x.active).length <= 1;
   const [f, setF] = useState({ email: "", name: "", role: "kasir", password: "" });
   const create = async () => { const r = await act(() => api.post("/users", f), "Pengguna dibuat"); if (r) { setF({ email: "", name: "", role: "kasir", password: "" }); load(); } };
   const patch = async (u, body, msg) => { await act(() => api.patch(`/users/${u.id}`, body), msg); load(); };
@@ -54,7 +57,7 @@ export function UsersPage() {
         ))}
       </Table>
       {del && <DeleteDialog kind="user" id={del.id} url={`/users/${del.id}`} onClose={() => setDel(null)} onDone={load}
-        onDeactivate={del.active ? () => api.patch(`/users/${del.id}`, { active: false }) : null} />}
+        onDeactivate={del.active && del.id !== me.id && !lastOwner(del) ? () => api.patch(`/users/${del.id}`, { active: false }) : null} />}
     </div>
   );
 }

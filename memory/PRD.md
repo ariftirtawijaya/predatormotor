@@ -37,8 +37,17 @@ Owner (Mas Latif) — semua modul, laporan laba, persetujuan diskon, pembatalan,
 - Produk induk + varian (items) dan impor Excel via openpyxl (`catalog_routes.py`, `ItemImport.js`); kolom cari bisa dikosongkan.
 - Tes: backend 94/94, frontend testing agent 100% (iteration_7).
 
+### 2026-11-09 (Iterasi 8)
+- Impor Excel atomik: validasi seluruh file (nama sama/kode beda, spasi & huruf besar/kecil, SKU/varian ganda, campuran baris sederhana/varian, bentrok DB); Simpan = transaksi MongoDB (replica set) dengan pemeriksaan ulang + plan_hash; 409 bila data berubah; tanpa replica set Simpan ditolak 503. Docker mongo `--replSet rs0` + healthcheck rs.initiate; `MONGO_URL ...?replicaSet=rs0`; restore.sh cek PRIMARY; `scripts/test-replset.sh` (uji integrasi container sementara). Indeks unik baru: products.name_key, items(product_id, variant_key); koleksi baru `locks`, `deleted_records`.
+- Hapus khusus owner (`delete_routes.py`): cek referensi semua status (nota/penjualan/pesanan/retur/klaim/rusak/mutasi transaksi/paket), stok >0 ditolak, arsip + audit, konfirmasi ketik nama; Nonaktifkan barang/produk/paket/akun; barang & paket nonaktif ditolak di transaksi baru.
+- Sidebar grup buka/tutup + satu menu Pengaturan (tab WhatsApp & Reset Data); /admin/reset-data dialihkan.
+- Produk sederhana (tanpa varian) default; Tambah Varian opsional; SKU otomatis; produk sederhana → varian: barang lama jadi varian pertama (ID/SKU/stok tetap).
+- Paket: field merek/model dihapus dari form; Opsi Paket: Tambah barang / Ganti komponen (replaces) dengan selisih harga; opsi bertentangan ditolak; komponen terpasang disnapshot di nota.
+- Tes: backend 114 passed pada replica set nyata (port 27018), standalone 109 passed + tes RS di-skip; frontend testing agent 100% (iteration_8) pada stack terisolasi localhost:3001/8002.
+
 ## Prioritized backlog
-- P1: Bantu deploy ke VPS milik owner (Docker Compose).
+- P0: Owner menjalankan `./scripts/test-replset.sh` di VPS lalu migrasi Docker ke replica set sebelum impor data asli.
+- P1: Ubah opsi paket lama (mode "Tambah barang") menjadi "Ganti komponen" bila memang upgrade.
 - P0: Uji kirim nyata dengan token & perangkat Fonnte milik owner.
 - P1: Isi data asli via CMS (alamat, jam, logo, foto, layanan) — tugas konten owner.
 - P1: Server-side meta tags (SSR/prerender) untuk pratinjau tautan.
@@ -46,4 +55,4 @@ Owner (Mas Latif) — semua modul, laporan laba, persetujuan diskon, pembatalan,
 - P2: Pemilih tanggal berformat Indonesia; migrasi data lama; pecah tx_routes.py.
 
 ## Next tasks
-Owner mencoba iterasi 7 (varian, impor Excel, COD ongkir, reset data), lalu persiapan deploy VPS.
+Owner uji manual alur iterasi 8 lalu deploy VPS dengan replica set.

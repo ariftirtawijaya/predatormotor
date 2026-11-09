@@ -63,7 +63,7 @@ function PackagePreview({ pkg, opts, setOpts }) {
   const opt = (o) => (
     <label key={o.id} className={`flex items-center gap-2 ${clash(o) ? "opacity-40" : ""}`}>
       <input type="checkbox" disabled={clash(o)} checked={opts.includes(o.id)} onChange={(e) => setOpts(e.target.checked ? [...opts, o.id] : opts.filter((x) => x !== o.id))} data-testid={`linepicker-option-${o.id}`} />
-      {o.mode === "replace" ? <span>{o.name}: ganti {o.replaces_name} → {o.items.map((c) => c.name).join(", ")} ({o.price >= 0 ? "+" : ""}{rp(o.price)})</span> : <span>{o.name} (+{rp(o.price)})</span>}
+      {o.mode === "replace" ? <span>{o.name}: ganti {o.replaces_name} → {o.items.map((c) => `${c.name} x${c.qty}`).join(", ")} ({o.price >= 0 ? "+" : ""}{rp(o.price)})</span> : <span>{o.name} (+{rp(o.price)})</span>}
     </label>
   );
   const add = pkg.options.filter((o) => o.mode !== "replace");
@@ -100,7 +100,7 @@ export function LinePicker({ onAdd, garansi, busy }) {
             {(pkgs || []).filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name} — {rp(p.price)}</option>)}
           </Select>
           {pkg && <PackagePreview pkg={pkg} opts={opts} setOpts={setOpts} />}
-          <Btn type="button" disabled={!pid || busy} onClick={() => onAdd({ type: "package", package_id: pid, option_ids: opts, qty: 1 })} data-testid="linepicker-add-package">Tambah paket</Btn>
+          <Btn type="button" disabled={!pid || busy} onClick={() => { onAdd({ type: "package", package_id: pid, option_ids: opts, qty: 1 }); setPid(""); setOpts([]); }} data-testid="linepicker-add-package">Tambah paket</Btn>
         </div>
       )}
       {tab === "item" && (

@@ -112,7 +112,7 @@ function PackageCard({ p, owner, edit, del }) {
       <Btn size="sm" v="outline" onClick={edit} data-testid={`pkg-edit-${p.id}`}>Ubah</Btn>
       {owner && <Btn size="sm" v="ghost" className="text-red-700" onClick={del} data-testid={`pkg-delete-${p.id}`}><Trash2 className="h-3.5 w-3.5" />Hapus</Btn>}</>}>
       <p className="font-mono-num text-lg font-bold">{rp(p.price)}</p>
-      <p className="text-sm text-slate-600">{p.main_brand_model ? `${p.main_brand_model} · ` : ""}garansi {p.warranty_days || 0} hari</p>
+      <p className="text-sm text-slate-600">Garansi {p.warranty_days || 0} hari</p>
       {owner && <p className="text-xs text-slate-500">Modal komponen: {rp(p.cost_total)}</p>}
       <ul className="mt-2 text-sm">{p.components.map((c, i) => <li key={i}>• {c.name} x{c.qty} <span className="text-xs text-slate-500">(stok {c.stock})</span></li>)}</ul>
       {p.options.map((o) => (

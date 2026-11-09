@@ -29,7 +29,12 @@ export function ImportDialog({ onClose, onDone }) {
       const r = await api.post(`/items/import?commit=${commit}${commit ? `&plan_hash=${res?.plan_hash || ""}` : ""}`, fd);
       setRes(r.data);
       return r.data;
-    } catch (e) { setErr(errMsg(e)); if (commit) setRes(null); return null; } finally { setBusy(false); }
+    } catch (e) {
+      setErr(errMsg(e));
+      const rows = e?.response?.data?.errors;
+      if (commit && rows?.length) setRes({ ...res, errors: rows });
+      return null;
+    } finally { setBusy(false); }
   };
   const commit = async () => {
     const d = await send(true);
@@ -63,7 +68,7 @@ export function ImportDialog({ onClose, onDone }) {
             <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900" data-testid="import-no-transactions">Server database belum mode replica set, jadi impor belum bisa disimpan di sini (pratinjau tetap berfungsi). Di VPS, ikuti README bagian Impor Excel.</p>
           )}
           {res.committed ? <p className="font-semibold text-emerald-700" data-testid="import-done">Impor selesai disimpan.</p> : (
-            <Btn disabled={busy || !!res.errors.length || !res.rows.length || !res.transactions_ready} onClick={commit} data-testid="import-commit-button">Konfirmasi & simpan impor</Btn>
+            <Btn disabled={busy || !!res.errors.length || !res.rows.length || !res.transactions_ready || !(res.summary.variants_new + res.summary.variants_update)} onClick={commit} data-testid="import-commit-button">{res.summary.variants_new + res.summary.variants_update ? "Konfirmasi & simpan impor" : "Tidak ada perubahan untuk disimpan"}</Btn>
           )}
         </>)}
       </div>
