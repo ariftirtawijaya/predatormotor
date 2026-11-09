@@ -54,7 +54,15 @@ yarn install && yarn start
 
 Data uji (hanya untuk pengembangan, **jangan di produksi**): `ALLOW_DEMO_SEED=true DEMO_ADMIN_PASSWORD=<min8> DEMO_KASIR_PASSWORD=<min8> python seed_demo.py` (membuat admin/kasir uji dan barang berawalan `[TEST]`).
 
-Tes backend (butuh backend berjalan + data uji): isi `TEST_OWNER_EMAIL`, `TEST_OWNER_PASSWORD`, `TEST_ADMIN_EMAIL`, `TEST_ADMIN_PASSWORD`, `TEST_KASIR_EMAIL`, `TEST_KASIR_PASSWORD`, `REACT_APP_BACKEND_URL`, lalu `pip install pytest requests && python -m pytest tests -q`.
+Tes backend (hanya butuh MongoDB berjalan dan `MONGO_URL` di `backend/.env` atau env `TEST_MONGO_URL`):
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest tests -q
+```
+Suite default menyalakan server uvicorn khusus tes dengan database sementara `predator_pytest_*`, akun uji berpassword acak, folder unggahan sementara, dan JWT_SECRET acak; semuanya dihapus setelah tes. Database aplikasi (`DB_NAME`) tidak disentuh dan API Fonnte dialihkan ke alamat buntu, jadi tidak ada pesan WhatsApp nyata yang terkirim. Frontend: `cd frontend && CI=true yarn test --watchAll=false`.
+
+Tes live opsional (hanya baca, tidak mengubah token/nomor dan tidak mengirim pesan) terhadap server yang sudah berjalan: set `LIVE_BASE_URL`, `LIVE_OWNER_EMAIL`, `LIVE_OWNER_PASSWORD`, `LIVE_KASIR_EMAIL`, `LIVE_KASIR_PASSWORD`, lalu `pytest tests_live -q -n 0`.
 
 ## 3. Deploy ke VPS baru (Docker Compose + HTTPS otomatis)
 
@@ -114,6 +122,7 @@ Data & foto tetap aman di volume.
 | MAX_UPLOAD_MB | Batas ukuran gambar (default 5) |
 | OWNER_EMAIL / OWNER_PASSWORD | Opsional, hanya untuk membuat owner pertama |
 | DISABLE_DOCS | `true` untuk menyembunyikan /api/docs di produksi |
+| PUBLIC_SITE_URL | Alamat website publik untuk tautan nota di pesan WhatsApp (mis. `https://bengkel-anda.example`). Di Docker Compose otomatis diisi `https://${SITE_DOMAIN}` |
 
 ## 5. Keamanan
 - Password bcrypt; JWT akses 30 menit + refresh 7 hari di cookie httpOnly; pembatasan 5 percobaan login gagal → kunci 15 menit.

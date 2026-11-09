@@ -44,7 +44,7 @@ Suite backend: `python -m pytest tests/ -q -n 0` → **60 lulus / 60** (diuji ul
 
 ## Integrasi WhatsApp Fonnte (2026-11-08)
 
-Suite backend lengkap: `cd backend && python -m pytest tests/ -q -n 0` → **94 lulus / 94** (termasuk `test_whatsapp_fonnte.py` 26 tes dan `test_wa_live_api.py` 8 tes). Frontend: `cd frontend && CI=true yarn test --watchAll=false src/lib/wa.test.js` → 4/4. API Fonnte di-mock (respx) — tidak ada pesan nyata yang dikirim saat tes.
+Suite backend default (clone bersih, venv baru `pip install -r requirements-dev.txt`, `.env` dari `.env.example`): `cd backend && pytest tests -q` → **90 lulus / 90**, berjalan di database & server tes sementara (database aplikasi tidak berubah). Tes live hanya-baca dipisah ke `tests_live/` (dilewati tanpa kredensial LIVE_*). Frontend: `CI=true yarn test --watchAll=false` → 4/4. API Fonnte di-mock (respx) dan dialihkan ke alamat buntu — tidak ada pesan nyata yang dikirim saat tes.
 
 | # | Skenario | Hasil |
 |---|---|---|

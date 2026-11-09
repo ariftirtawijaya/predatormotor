@@ -2,9 +2,7 @@
 import threading
 from datetime import datetime, timezone
 from pymongo import MongoClient
-import os
-from pathlib import Path
-from conftest import BASE_URL, uid, stock_of
+from conftest import BASE_URL, uid, stock_of, MONGO_URL, TEST_DB
 from test_order_stock_integrity import new_item, new_order, pay
 from test_iteration4_fixes import new_job
 
@@ -12,9 +10,7 @@ B = BASE_URL + "/api"
 
 
 def _db():
-    env = dict(l.split("=", 1) for l in Path("/app/backend/.env").read_text().splitlines() if "=" in l)
-    url, name = env["MONGO_URL"].strip().strip('"'), env["DB_NAME"].strip().strip('"')
-    return MongoClient(url)[name]
+    return MongoClient(MONGO_URL)[TEST_DB]
 
 
 def race(*fns):

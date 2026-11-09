@@ -23,6 +23,11 @@ Owner (Mas Latif) — semua modul, laporan laba, persetujuan diskon, pembatalan,
 - CMS Kontak: field WhatsApp read-only (dilindungi di backend saat simpan/pulihkan revisi).
 - Frontend: `WhatsAppSettings.js`, `WaNota.js` (dialog pratinjau + kirim), `lib/wa.js` (+ jest test).
 - Tes: 94/94 backend (Fonnte di-mock), 4/4 jest. conftest punya cadangan JWT bila password akun uji diubah lewat aplikasi.
+### 2026-11-08 (perbaikan review Fonnte)
+- Suite default terisolasi: conftest menyalakan uvicorn tes + DB `predator_pytest_*` sementara, akun berpassword acak, FONNTE_API_URL buntu; fallback JWT dihapus (login salah → gagal jelas). Tes live hanya-baca dipindah ke `tests_live/`. `requirements-dev.txt`, `pythonpath` di pytest.ini.
+- Tautan nota memakai env `PUBLIC_SITE_URL` (compose: `https://${SITE_DOMAIN}`), bukan header Origin; kirim nota wajib `message_hash` dari pratinjau (409 jika isi berubah).
+- `save_totals` kini bersyarat pada baris yang dibaca (memperbaiki total basi saat edit serentak, ditemukan tes paralel).
+- Tes: clone bersih 90/90 (5x berturut-turut), jest 4/4.
 
 ## Prioritized backlog
 - P0: Uji kirim nyata dengan token & perangkat Fonnte milik owner.

@@ -32,7 +32,7 @@ export function WaLogList({ logs }) {
   );
 }
 
-function SendForm({ kind, doc, info, onSent }) {
+function SendForm({ kind, doc, info, onSent, onStale }) {
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
   const [key] = useState(newKey());
@@ -44,9 +44,12 @@ function SendForm({ kind, doc, info, onSent }) {
     if (busy) return;
     setBusy(true); setErr("");
     try {
-      const r = await api.post(`/wa/nota/${kind}/${doc.id}`, { send_key: key, target, resend, resend_reason: reason });
+      const r = await api.post(`/wa/nota/${kind}/${doc.id}`, { send_key: key, message_hash: info.message_hash, target, resend, resend_reason: reason });
       onSent(r.data);
-    } catch (e) { setErr(errMsg(e)); setBusy(false); }
+    } catch (e) {
+      setErr(errMsg(e)); setBusy(false);
+      if (e.response?.status === 409 && /berubah/.test(errMsg(e))) onStale();
+    }
   };
   return (
     <div className="space-y-3">
@@ -81,7 +84,7 @@ export function SendNotaWA({ kind, doc }) {
           <div className="space-y-4" data-testid="wa-nota-dialog">
             {!info.token_configured && <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900" data-testid="wa-nota-no-token">Token Fonnte belum diatur. Minta owner mengisinya di Pengaturan → WhatsApp.</p>}
             <WaResult r={result} />
-            <SendForm key={round} kind={kind} doc={doc} info={info} onSent={sent} />
+            <SendForm key={round} kind={kind} doc={doc} info={info} onSent={sent} onStale={load} />
             <div><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Isi pesan</p>
               <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-3 text-xs" data-testid="wa-nota-preview">{info.message}</pre></div>
             <div><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Riwayat pengiriman</p><WaLogList logs={info.logs} /></div>

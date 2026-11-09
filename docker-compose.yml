@@ -13,6 +13,8 @@ services:
     build: ./backend
     restart: unless-stopped
     env_file: ./backend/.env
+    environment:
+      PUBLIC_SITE_URL: https://${SITE_DOMAIN}
     volumes:
       - uploads:/data/uploads
     depends_on:

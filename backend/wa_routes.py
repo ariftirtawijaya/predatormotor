@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 from core import db, iso, now, new_id, require, audit, find_list, get_or_404, clean, COLL, STAFF, TZ, JWT_SECRET
@@ -14,10 +14,11 @@ from cms_routes import publish_key
 
 router = APIRouter(prefix="/api")
 log = logging.getLogger("predator.wa")
-FONNTE_URL = "https://api.fonnte.com/send"
+# FONNTE_API_URL hanya untuk lingkungan tes (dialihkan ke alamat buntu agar tes tak pernah mengirim pesan nyata).
+FONNTE_URL = os.environ.get("FONNTE_API_URL") or "https://api.fonnte.com/send"
 # Token Fonnte dienkripsi dengan kunci turunan JWT_SECRET; jika JWT_SECRET diganti, token wajib diisi ulang.
 FERNET = Fernet(base64.urlsafe_b64encode(hashlib.sha256(b"predator-fonnte-token:" + JWT_SECRET.encode()).digest()))
-ORIGINS = [o.strip().rstrip("/") for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()]
+PUBLIC_SITE_URL = os.environ["PUBLIC_SITE_URL"].strip().rstrip("/")
 KIND_LABEL = {"job": "Pekerjaan Bengkel", "sale": "Penjualan Langsung", "order": "Pesanan WhatsApp"}
 ACTIVE = ("mengirim", "antre", "tidak_pasti")
 LOCK_TTL = 60
@@ -242,7 +243,7 @@ def line_text(i, l):
     return out
 
 
-async def nota_message(kind, doc, origin):
+async def nota_message(kind, doc):
     pays = await find_list("payments", {"ref_type": kind, "ref_id": doc["id"]}, [("created_at", 1)])
     status = doc.get("ship_status") if kind == "order" else doc.get("status")
     cancelled = status == "Batal"
@@ -275,15 +276,14 @@ async def nota_message(kind, doc, origin):
         rows.append(f"*Sisa tagihan: {rp(rem)}*" if rem else "*Status pembayaran: LUNAS*")
     if kind == "order" and doc.get("payment_type") == "cod" and not cancelled:
         rows.append("Pembayaran: COD (bayar di tempat)")
-    if origin and doc.get("public_token"):
-        rows += ["", f"Lihat nota: {origin}/nota/{doc['public_token']}"]
+    if doc.get("public_token"):
+        rows += ["", f"Lihat nota: {PUBLIC_SITE_URL}/nota/{doc['public_token']}"]
     rows += ["", "Terima kasih."]
     return "\n".join(rows)
 
 
-def req_origin(request: Request):
-    o = (request.headers.get("origin") or "").rstrip("/")
-    return o if o and ("*" in ORIGINS or o in ORIGINS) else ""
+def msg_hash(message):
+    return hashlib.sha256(message.encode()).hexdigest()
 
 
 def check_kind(kind):
@@ -292,7 +292,7 @@ def check_kind(kind):
 
 
 @router.get("/wa/nota/{kind}/{tid}")
-async def nota_preview(kind: str, tid: str, request: Request, user=Depends(require(*STAFF))):
+async def nota_preview(kind: str, tid: str, user=Depends(require(*STAFF))):
     check_kind(kind)
     doc = await get_or_404(COLL[kind], tid, "Transaksi tidak ditemukan")
     phone = stored_phone(doc)
@@ -302,19 +302,22 @@ async def nota_preview(kind: str, tid: str, request: Request, user=Depends(requi
     except HTTPException:
         bad = True
     d = await settings_doc()
-    return {"target": phone, "target_invalid": bad, "target_editable": kind == "sale" and not phone, "message": await nota_message(kind, doc, req_origin(request)),
+    message = await nota_message(kind, doc)
+    return {"target": phone, "target_invalid": bad, "target_editable": kind == "sale" and not phone,
+            "message": message, "message_hash": msg_hash(message),
             "token_configured": bool(d.get("token_enc")),
             "logs": await find_list("wa_logs", {"ref_type": kind, "ref_id": tid}, [("created_at", -1)], 50)}
 
 
 class NotaSendIn(SendKeyIn):
+    message_hash: str = Field(min_length=64, max_length=64)
     target: str = Field(default="", max_length=30)
     resend: bool = False
     resend_reason: str = Field(default="", max_length=200)
 
 
 @router.post("/wa/nota/{kind}/{tid}")
-async def nota_send(kind: str, tid: str, body: NotaSendIn, request: Request, user=Depends(require(*STAFF))):
+async def nota_send(kind: str, tid: str, body: NotaSendIn, user=Depends(require(*STAFF))):
     check_kind(kind)
     ex = await db.wa_logs.find_one({"send_key": body.send_key}, {"_id": 0})
     if ex:
@@ -328,6 +331,9 @@ async def nota_send(kind: str, tid: str, body: NotaSendIn, request: Request, use
     target = normalize_wa(phone or body.target)
     if body.resend and len(body.resend_reason.strip()) < 3:
         raise HTTPException(400, "Tuliskan alasan kirim ulang (minimal 3 huruf)")
+    message = await nota_message(kind, doc)
+    if msg_hash(message) != body.message_hash:
+        raise HTTPException(409, "Isi nota berubah sejak pratinjau dibuka. Tutup lalu buka lagi untuk melihat pesan terbaru.")
     tok = await get_token()
     lock = f"nota:{kind}:{tid}"
     await take_lock(lock)
@@ -337,7 +343,7 @@ async def nota_send(kind: str, tid: str, body: NotaSendIn, request: Request, use
             raise HTTPException(409, "Nota ini sudah pernah dikirim. Gunakan tombol Kirim Ulang jika memang perlu mengirim lagi.")
         entry = base_entry(user, "nota", body.send_key, target, ref_type=kind, ref_id=tid, ref_no=doc["no"],
                            resend=bool(prior) and body.resend, resend_reason=body.resend_reason.strip() or None)
-        return await deliver(entry, tok, await nota_message(kind, doc, req_origin(request)))
+        return await deliver(entry, tok, message)
     finally:
         await db.wa_locks.delete_one({"key": lock})
 

@@ -71,8 +71,17 @@ def usage(doc):
 
 
 async def save_totals(kind, doc, write_lines=False):
-    t = totals(doc)
-    await db[COLL[kind]].update_one({"id": doc["id"]}, {"$set": t | ({"lines": doc["lines"]} if write_lines else {})})
+    coll = db[COLL[kind]]
+    if write_lines:
+        t = totals(doc)
+        await coll.update_one({"id": doc["id"]}, {"$set": t | {"lines": doc["lines"]}})
+        return t
+    # Simpan total hanya jika baris belum berubah sejak dibaca; jika berubah (edit serentak) hitung ulang.
+    for _ in range(20):
+        t = totals(doc)
+        if (await coll.update_one({"id": doc["id"], "lines": doc["lines"]}, {"$set": t})).matched_count:
+            return t
+        doc = await load(kind, doc["id"])
     return t
 
 
