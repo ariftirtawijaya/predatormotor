@@ -11,13 +11,15 @@ import master_routes
 import tx_routes
 import report_routes
 import wa_routes
+import catalog_routes
+import reset_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("predator")
 
 app = FastAPI(title="Predator Autolight API", docs_url=None if os.environ.get("DISABLE_DOCS") == "true" else "/api/docs",
               openapi_url="/api/openapi.json")
-for r in (auth_routes, cms_routes, master_routes, tx_routes, report_routes, wa_routes):
+for r in (auth_routes, cms_routes, master_routes, tx_routes, report_routes, wa_routes, catalog_routes, reset_routes):
     app.include_router(r.router)
 
 ORIGINS = [o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()]
@@ -58,6 +60,7 @@ INDEXES = {
     "expenses": [IndexModel([("date", ASCENDING)])],
     "audit_logs": [IndexModel([("created_at", DESCENDING)])],
     "counters": [IndexModel([("key", ASCENDING)], unique=True)],
+    "products": [IndexModel([("id", ASCENDING)], unique=True), IndexModel([("code", ASCENDING)], unique=True)],
     "settings": [IndexModel([("key", ASCENDING)], unique=True)],
     "wa_logs": [IndexModel([("send_key", ASCENDING)], unique=True), IndexModel([("ref_id", ASCENDING)]),
                 IndexModel([("created_at", DESCENDING)])],
@@ -73,6 +76,13 @@ async def startup():
         except Exception as e:
             log.error("index %s: %s", coll, e)
     await cms_routes.ensure_cms()
+    n = await catalog_routes.migrate_products()
+    if n:
+        log.info("Migrasi: %s barang lama dipetakan ke produk induk + varian", n)
+    # Pesanan COD model lama (COD harga barang) ditandai eksplisit sebagai data lama; tidak ditafsir ulang sebagai COD ongkir.
+    m = await tx_routes.migrate_legacy_orders()
+    if m:
+        log.info("Migrasi: %s pesanan COD lama ditandai legacy_cod", m)
     email, pw = os.environ.get("OWNER_EMAIL"), os.environ.get("OWNER_PASSWORD")
     if email and pw and await db.users.count_documents({}) == 0:
         await db.users.insert_one({"id": new_id(), "email": email.lower(), "name": os.environ.get("OWNER_NAME", "Owner"), "role": "owner",

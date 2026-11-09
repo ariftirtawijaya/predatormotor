@@ -17,6 +17,11 @@ function setMeta(name, content, prop) {
   el.setAttribute("content", content || "");
 }
 
+function readableOn(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.3 ? "#0b1220" : "#ffffff";
+}
+
 function useSeo(site, path) {
   useEffect(() => {
     if (!site) return;
@@ -30,6 +35,7 @@ function useSeo(site, path) {
     setMeta("og:image", mediaUrl(seo.og_image || id.default_image || id.logo), true);
     setMeta("robots", seo.noindex || site.preview ? "noindex,nofollow" : "index,follow");
     document.documentElement.style.setProperty("--site-accent", id.accent_color || "#f59e0b");
+    document.documentElement.style.setProperty("--site-accent-fg", readableOn(id.accent_color || "#f59e0b"));
     if (id.favicon) {
       let l = document.head.querySelector("link[rel='icon']");
       if (!l) { l = document.createElement("link"); l.rel = "icon"; document.head.appendChild(l); }
@@ -43,21 +49,21 @@ function Nav({ site }) {
   const id = site.identity;
   const items = (site.navigation.items || []).filter((i) => i.enabled);
   return (
-    <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/60 backdrop-blur-xl">
+    <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
-        <SLink href="/" className="flex items-center gap-2.5" testid="site-logo">
-          {id.logo ? <Img src={id.logo} alt={id.name} className="h-9 w-auto" /> : <span className="h-3 w-3 rounded-full accent-bg accent-glow" />}
-          <span className="font-display text-lg font-extrabold tracking-tight text-white">{id.name}</span>
+        <SLink href="/" className="flex min-w-0 items-center gap-2.5" testid="site-logo">
+          {id.logo ? <Img src={id.logo} alt={id.name} className="h-9 max-w-[140px] object-contain" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg accent-bg font-display text-sm font-black" data-testid="site-logo-fallback">{(id.name || "P").trim()[0]}</span>}
+          <span className="truncate font-display text-base font-extrabold tracking-tight text-slate-900 sm:text-lg">{id.name}</span>
         </SLink>
         <nav className="hidden items-center gap-7 lg:flex">
-          {items.map((i, k) => <SLink key={k} href={i.href} className="text-sm font-medium text-zinc-300 transition-colors hover:text-white" testid={`site-nav-${k}`}>{i.label}</SLink>)}
-          {site.navigation.cta_label && <SLink href={site.navigation.cta_href} className="rounded-full px-5 py-2 text-sm font-bold text-black accent-bg transition-transform hover:-translate-y-0.5" testid="site-nav-cta">{site.navigation.cta_label}</SLink>}
+          {items.map((i, k) => <SLink key={k} href={i.href} className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900" testid={`site-nav-${k}`}>{i.label}</SLink>)}
+          {site.navigation.cta_label && <SLink href={site.navigation.cta_href} className="rounded-full px-5 py-2 text-sm font-bold accent-bg transition-transform hover:-translate-y-0.5" testid="site-nav-cta">{site.navigation.cta_label}</SLink>}
         </nav>
-        <button className="text-white lg:hidden" onClick={() => setOpen(!open)} data-testid="site-menu-toggle" aria-label="Menu">{open ? <X /> : <Menu />}</button>
+        <button className="text-slate-900 lg:hidden" onClick={() => setOpen(!open)} data-testid="site-menu-toggle" aria-label="Menu">{open ? <X /> : <Menu />}</button>
       </div>
       {open && (
-        <div className="border-t border-white/10 bg-zinc-950 px-5 py-4 lg:hidden" onClick={() => setOpen(false)}>
-          {items.map((i, k) => <SLink key={k} href={i.href} className="block py-3 text-base font-medium text-zinc-200" testid={`site-mnav-${k}`}>{i.label}</SLink>)}
+        <div className="border-t border-slate-200 bg-white px-5 py-4 lg:hidden" onClick={() => setOpen(false)}>
+          {items.map((i, k) => <SLink key={k} href={i.href} className="block py-3 text-base font-medium text-slate-800" testid={`site-mnav-${k}`}>{i.label}</SLink>)}
         </div>
       )}
     </header>
@@ -67,10 +73,10 @@ function Nav({ site }) {
 function Footer({ site }) {
   const { identity: id, footer: f, contact: c } = site;
   return (
-    <footer className="border-t border-white/10 bg-zinc-950 text-zinc-400">
+    <footer className="border-t border-slate-200 bg-slate-50 text-slate-600">
       <div className="mx-auto grid max-w-7xl gap-10 px-5 py-14 md:grid-cols-3 lg:px-8">
         <div>
-          <p className="font-display text-xl font-extrabold text-white">{id.name}</p>
+          <p className="font-display text-xl font-extrabold text-slate-900">{id.name}</p>
           <p className="mt-3 text-sm leading-relaxed">{f.text || id.short_desc}</p>
         </div>
         <div className="space-y-3 text-sm">
@@ -83,7 +89,7 @@ function Footer({ site }) {
           {(c.socials || []).map((s, i) => <a key={i} href={s.url} target="_blank" rel="noreferrer" className="hover:text-white">{s.platform}</a>)}
         </div>
       </div>
-      <p className="border-t border-white/5 py-5 text-center text-xs">© {new Date().getFullYear()} {f.copyright || id.name}</p>
+      <p className="border-t border-slate-200 py-5 text-center text-xs text-slate-500">© {new Date().getFullYear()} {f.copyright || id.name}</p>
     </footer>
   );
 }
@@ -110,11 +116,11 @@ export default function PublicLayout() {
   }, [preview]);
   useEffect(() => { window.scrollTo(0, 0); }, [loc.pathname]);
   useSeo(site, loc.pathname);
-  if (err) return <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6 text-zinc-300">{err}</div>;
-  if (!site) return <div className="min-h-screen bg-zinc-950" />;
+  if (err) return <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 text-slate-700">{err}</div>;
+  if (!site) return <div className="min-h-screen bg-white" />;
   return (
     <SiteCtx.Provider value={site}>
-      <div className="min-h-screen bg-[#09090b] font-site text-zinc-100 selection:bg-[var(--site-accent)] selection:text-black">
+      <div className="site-light min-h-screen bg-white font-site text-slate-800 selection:bg-[var(--site-accent)] selection:text-black">
         {preview && <div className="fixed inset-x-0 top-16 z-50 bg-amber-400 py-1.5 text-center text-xs font-bold text-black" data-testid="preview-banner">MODE PRATINJAU — menampilkan draft yang belum diterbitkan</div>}
         <Nav site={site} />
         <main className="pt-16"><Outlet /></main>

@@ -6,7 +6,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from core import (db, now, iso, new_id, local_date, token, find_list, get_or_404, require, audit, strip_cost, norm_phone, norm_plate,
                   next_number, move_many, add_payment, record_damage, recompute_paid, COLL, STAFF, MANAGERS)
-from master_routes import upsert_customer, upsert_vehicle, JAVA
+from master_routes import upsert_customer, upsert_vehicle, valid_phone, JAVA
 
 router = APIRouter(prefix="/api")
 
@@ -62,8 +62,13 @@ def totals(doc):
     disc = d.get("amount", 0) if d.get("status") == "approved" else 0
     disc = min(disc, sub)
     ship = doc.get("shipping_cost", 0) or 0
-    return {"subtotal": sub, "discount_amount": disc, "total": sub - disc + ship,
-            "hpp": sum(l.get("cost_total", 0) for l in active)}
+    if doc.get("shipping_payer") == "cod_kurir":
+        ship = 0  # ongkir COD dibayar pelanggan langsung ke kurir, bukan tagihan bengkel
+    out = {"subtotal": sub, "discount_amount": disc, "total": sub - disc + ship,
+           "hpp": sum(l.get("cost_total", 0) for l in active)}
+    if "delivery" in doc:
+        out["goods_total"] = sub - disc
+    return out
 
 
 def usage(doc):
@@ -449,6 +454,51 @@ class PayIn(BaseModel):
     method: str
     note: str = ""
     idem_key: str | None = None
+    purpose: str = "barang"
+
+
+def new_cod(doc):
+    return doc.get("cod_model") == "ongkir"
+
+
+def order_ready(doc):
+    """Pesanan model baru: barang lunas dan (jika ongkir dibayar ke bengkel) ongkir lunas."""
+    goods_ok = doc.get("goods_paid", 0) >= doc["goods_total"]
+    ship_ok = doc["shipping_payer"] != "bengkel" or doc.get("ship_paid", 0) >= doc["shipping_cost"]
+    return goods_ok, ship_ok
+
+
+async def _pay_order(doc, body, user):
+    if body.method not in ("tunai", "transfer"):
+        raise HTTPException(400, "Pembayaran ke bengkel hanya tunai atau transfer")
+    if body.purpose == "ongkir":
+        if doc["shipping_payer"] != "bengkel":
+            raise HTTPException(400, "Ongkir pesanan ini tidak dibayar ke bengkel" + (" (COD ongkir ke kurir)" if doc["shipping_payer"] == "cod_kurir" else ""))
+        remaining = doc["shipping_cost"] - doc.get("ship_paid", 0)
+        label = "ongkir"
+    elif body.purpose == "barang":
+        remaining = doc["goods_total"] - doc.get("goods_paid", 0)
+        label = "harga barang"
+    else:
+        raise HTTPException(400, "Tujuan pembayaran harus barang atau ongkir")
+    if body.amount > remaining:
+        raise HTTPException(400, f"Pembayaran melebihi sisa {label} (Rp{max(remaining, 0):,})".replace(",", "."))
+    pkind = "ongkir" if body.purpose == "ongkir" else ("pelunasan" if body.amount == remaining and doc.get("goods_paid", 0) > 0
+                                                     else ("dp" if body.amount < remaining else "pembayaran"))
+    deducted = False
+    if body.purpose == "barang" and doc.get("goods_paid", 0) + body.amount >= doc["goods_total"]:
+        deducted = await apply_order_stock(doc, user, f"Pesanan WA barang lunas {doc['no']}")
+    try:
+        p = await add_payment("order", doc, body.amount, body.method, pkind, user, body.idem_key, body.note, purpose=body.purpose)
+    except Exception:
+        if deducted:
+            await revert_order_stock(doc, user, f"Pembayaran gagal dicatat {doc['no']}")
+        raise
+    if p is None and deducted:
+        await revert_order_stock(doc, user, f"Permintaan pembayaran ganda {doc['no']}")
+    if p:
+        await audit(user, "catat_pembayaran", "order", doc["id"], after={"amount": body.amount, "method": body.method, "purpose": body.purpose})
+    return await with_extras("order", await load("order", doc["id"]), user)
 
 
 async def apply_order_stock(doc, user, reason):
@@ -504,6 +554,8 @@ async def _pay(kind, tid, body, user):
     if (doc.get("discount") or {}).get("status") == "pending":
         raise HTTPException(400, "Diskon masih menunggu persetujuan owner")
     remaining = doc["total"] - doc["paid"]
+    if kind == "order" and new_cod(doc):
+        return await _pay_order(doc, body, user)
     if body.amount > remaining:
         raise HTTPException(400, f"Pembayaran melebihi sisa tagihan (Rp{remaining:,})".replace(",", "."))
     if kind == "order" and doc["payment_type"] == "cod":
@@ -689,14 +741,17 @@ async def get_sale(sid: str, user=Depends(require(*STAFF))):
 
 # ---------- WhatsApp orders ----------
 class OrderIn(BaseModel):
-    customer_name: str = Field(min_length=1, max_length=100)
-    customer_phone: str = Field(min_length=6)
+    customer_id: str | None = None
+    customer_name: str = Field(default="", max_length=100)
+    customer_phone: str = ""
     address: str = ""
     province: str = ""
     delivery: str = "kurir"
     courier: str = "J&T"
     shipping_cost: int = Field(default=0, ge=0)
+    shipping_payer: str = "bengkel"
     payment_type: str = "prabayar"
+    save_address: bool = True
     lines: list[LineIn] = Field(min_length=1)
     notes: str = ""
 
@@ -704,34 +759,53 @@ class OrderIn(BaseModel):
 def validate_order(body):
     if body.delivery not in ("kurir", "ambil"):
         raise HTTPException(400, "Pengiriman tidak valid")
-    if body.payment_type not in ("prabayar", "cod"):
-        raise HTTPException(400, "Jenis pembayaran tidak valid")
-    if body.delivery == "kurir":
-        if not body.province:
-            raise HTTPException(400, "Provinsi tujuan wajib dipilih")
-        if not body.address.strip():
-            raise HTTPException(400, "Alamat tujuan wajib diisi")
-    if body.payment_type == "cod":
-        if body.delivery != "kurir":
-            raise HTTPException(400, "COD hanya untuk pengiriman kurir")
-        if body.province not in JAVA:
-            raise HTTPException(400, "COD hanya tersedia untuk tujuan Pulau Jawa. Tujuan luar Jawa wajib bayar di muka.")
+    if body.payment_type != "prabayar":
+        raise HTTPException(400, "Harga barang selalu dibayar di muka. COD hanya untuk ongkir (tujuan Pulau Jawa, kurir J&T).")
+    if body.delivery == "ambil":
+        return
+    if body.shipping_payer not in ("bengkel", "cod_kurir"):
+        raise HTTPException(400, "Cara bayar ongkir tidak valid")
+    if not body.province:
+        raise HTTPException(400, "Provinsi tujuan wajib dipilih")
+    if not body.address.strip():
+        raise HTTPException(400, "Alamat tujuan wajib diisi")
+    if body.shipping_payer == "cod_kurir" and body.province not in JAVA:
+        raise HTTPException(400, "COD ongkir hanya untuk tujuan Pulau Jawa. Tujuan luar Jawa: ongkir wajib dibayar di muka.")
+
+
+async def order_customer(body):
+    if body.customer_id:
+        return await get_or_404("customers", body.customer_id, "Pelanggan tidak ditemukan")
+    phone = valid_phone(body.customer_phone)
+    ex = await db.customers.find_one({"phone": phone}, {"_id": 0})
+    if ex:
+        return ex
+    if not body.customer_name.strip():
+        raise HTTPException(400, "Nama pelanggan wajib diisi")
+    return await upsert_customer({"name": body.customer_name, "phone": phone})
 
 
 @router.post("/orders")
 async def create_order(body: OrderIn, user=Depends(require(*STAFF))):
     validate_order(body)
+    c = await order_customer(body)
     lines = [await build_line(l, user) for l in body.lines]
-    d = {"id": new_id(), "no": await next_number("WA"), "customer": {"name": body.customer_name.strip(), "phone": norm_phone(body.customer_phone)},
-         "address": body.address[:500], "province": body.province, "is_java": body.province in JAVA, "delivery": body.delivery,
-         "courier": body.courier[:30] if body.delivery == "kurir" else "", "resi": "",
-         "shipping_cost": body.shipping_cost if body.delivery == "kurir" else 0, "payment_type": body.payment_type,
+    kurir = body.delivery == "kurir"
+    payer = body.shipping_payer if kurir else "none"
+    d = {"id": new_id(), "no": await next_number("WA"), "customer": {"id": c["id"], "name": c["name"], "phone": c["phone"]},
+         "customer_id": c["id"], "address": body.address[:500] if kurir else "", "province": body.province if kurir else "",
+         "is_java": body.province in JAVA, "delivery": body.delivery,
+         "courier": ("J&T" if payer == "cod_kurir" else body.courier[:30]) if kurir else "", "resi": "",
+         "shipping_cost": body.shipping_cost if kurir else 0, "shipping_payer": payer, "cod_model": "ongkir", "payment_type": "prabayar",
          "lines": lines, "discount": None, "notes": body.notes[:1000], "ship_status": "Baru", "paid": 0, "refunded": 0,
+         "goods_paid": 0, "ship_paid": 0,
          "stock_applied": False, "recognized": False, "cod_settled": False, "returns": [], "public_token": token(),
          "created_by": user["name"], "created_at": iso(), "date_local": local_date()}
     d |= totals(d)
     await db.orders.insert_one(d)
-    await audit(user, "buat_pesanan_wa", "order", d["id"], after={"no": d["no"], "total": d["total"]})
+    if kurir and body.save_address:
+        await db.customers.update_one({"id": c["id"]}, {"$set": {"address": d["address"], "province": d["province"]}})
+    await audit(user, "buat_pesanan_wa", "order", d["id"], after={"no": d["no"], "total": d["total"], "shipping_payer": payer})
     return await with_extras("order", await load("order", d["id"]), user)
 
 
@@ -794,11 +868,19 @@ async def ship_order(oid: str, body: ShipIn, user=Depends(require(*STAFF))):
         raise HTTPException(400, "Status pesanan tidak dapat dikirim")
     if (doc.get("discount") or {}).get("status") == "pending":
         raise HTTPException(400, "Diskon masih menunggu persetujuan owner")
-    if doc["payment_type"] == "prabayar" and doc["paid"] < doc["total"]:
+    if new_cod(doc):
+        goods_ok, ship_ok = order_ready(doc)
+        if not goods_ok:
+            raise HTTPException(400, "Harga barang harus lunas sebelum pesanan dikirim/diambil")
+        if not ship_ok:
+            raise HTTPException(400, "Ongkir dibayar ke bengkel dan belum lunas")
+        if not doc.get("stock_applied"):
+            await apply_order_stock(doc, user, f"Pesanan WA barang lunas {doc['no']} (pemotongan stok tertunda)")
+    elif doc["payment_type"] == "prabayar" and doc["paid"] < doc["total"]:
         raise HTTPException(400, "Pesanan prabayar harus lunas sebelum dikirim/diambil")
-    if doc["payment_type"] == "prabayar" and not doc.get("stock_applied"):
+    if not new_cod(doc) and doc["payment_type"] == "prabayar" and not doc.get("stock_applied"):
         await apply_order_stock(doc, user, f"Pesanan WA lunas {doc['no']} (pemotongan stok tertunda)")
-    if doc["payment_type"] == "cod":
+    if not new_cod(doc) and doc["payment_type"] == "cod":
         await apply_order_stock(doc, user, f"Pesanan COD dikirim {doc['no']}")
     if not (await load("order", oid)).get("stock_applied"):
         raise HTTPException(409, "Stok pesanan belum berhasil dipotong. Pesanan tidak dapat dikirim.")
@@ -868,6 +950,12 @@ async def _cancel_order(doc, body, user):
         "date_local": local_date(), "items": [i.model_dump() for i in body.items], "items_not_returned": not_back}}})
 
 
+async def migrate_legacy_orders():
+    r = await db.orders.update_many({"payment_type": "cod", "cod_model": {"$exists": False}, "legacy_cod": {"$exists": False}},
+                                    {"$set": {"legacy_cod": True}})
+    return r.modified_count
+
+
 # ---------- Public receipt ----------
 @router.get("/public/nota/{tok}")
 async def public_nota(tok: str):
@@ -882,5 +970,6 @@ async def public_nota(tok: str):
                     "lines": [{k: l.get(k) for k in ("name", "detail", "options", "qty", "unit_price", "subtotal", "warranty_until")}
                               for l in d["lines"] if not l.get("removed")],
                     "subtotal": d["subtotal"], "discount_amount": d["discount_amount"], "shipping_cost": d.get("shipping_cost", 0),
-                    "total": d["total"], "paid": d["paid"], "refunded": d.get("refunded", 0), "remaining": max(d["total"] - d["paid"], 0)}
+                    "total": d["total"], "paid": d["paid"], "refunded": d.get("refunded", 0), "remaining": max(d["total"] - d["paid"], 0),
+                    "shipping_payer": d.get("shipping_payer"), "courier": d.get("courier"), "legacy_cod": bool(d.get("legacy_cod"))}
     raise HTTPException(404, "Nota tidak ditemukan")

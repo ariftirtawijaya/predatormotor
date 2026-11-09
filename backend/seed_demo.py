@@ -46,6 +46,8 @@ async def main():
                                                      {"item_id": ids["TEST-RELAY-01"], "qty": 1}],
                                       "options": [{"id": new_id(), "name": "Upgrade Shroud RGB", "price": 350000,
                                                    "items": [{"item_id": ids["TEST-SHROUD-RGB"], "qty": 2}]}], "created_at": iso()})
+    from catalog_routes import migrate_products
+    await migrate_products()
     print("Data uji siap.")
 
 

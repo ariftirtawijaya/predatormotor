@@ -34,8 +34,8 @@ export const Eyebrow = ({ children }) => <p className="mb-3 text-xs font-bold up
 
 export const H2 = ({ children, sub }) => (
   <div className="mb-10 max-w-2xl">
-    <h2 className="font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">{children}</h2>
-    {sub && <p className="mt-3 text-base text-zinc-400 md:text-lg">{sub}</p>}
+    <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">{children}</h2>
+    {sub && <p className="mt-3 text-base text-slate-600 md:text-lg">{sub}</p>}
   </div>
 );
 
@@ -43,4 +43,4 @@ export const Price = ({ s }) => (
   <p className="font-display text-xl font-bold accent-text">{s.price_text || (s.price ? "Rp" + Number(s.price).toLocaleString("id-ID") : "Hubungi kami")}</p>
 );
 
-export const Empty = ({ children }) => <p className="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-zinc-400">{children}</p>;
+export const Empty = ({ children }) => <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-500">{children}</p>;

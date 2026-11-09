@@ -5,7 +5,7 @@ import { useAuth, isOwner } from "@/context/AuthContext";
 import { Btn, Field, Input, NumInput, Select, Card, Table, Td, PageHead } from "@/admin/ui";
 import { useLoad, act } from "@/admin/tx";
 
-export const CATS = ["Gaji", "Listrik", "Internet", "Biaya bengkel", "Peralatan", "Transportasi", "Lainnya"];
+export const CATS = ["Gaji", "Listrik", "Internet", "Biaya bengkel", "Peralatan", "Transportasi", "Ongkir dibayar bengkel", "Lainnya"];
 
 export default function Expenses() {
   const { user } = useAuth();

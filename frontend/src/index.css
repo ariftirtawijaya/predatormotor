@@ -56,6 +56,24 @@ body {
 .rise { animation: rise .6s ease-out both; }
 
 .receipt-80 { width: 80mm; font-size: 11px; }
+
+/* Website publik light mode: memetakan kelas lama (gelap) ke palet terang; dashboard & nota tidak terpengaruh. */
+.site-light { --ink: #0f172a; --ink-2: #334155; --ink-3: #475569; --line: #e2e8f0; }
+.site-light .accent-text { color: color-mix(in srgb, var(--site-accent) 68%, #111827); }
+.site-light .accent-bg { color: var(--site-accent-fg, #0b1220); }
+.site-light .accent-soft { background-color: color-mix(in srgb, var(--site-accent) 12%, #ffffff); }
+.site-light .hero-light { background: radial-gradient(ellipse at 85% 10%, color-mix(in srgb, var(--site-accent) 16%, transparent) 0%, transparent 55%), linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); }
+.site-light .hero-empty { background-color: #f8fafc; background-image: linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px); background-size: 28px 28px; }
+.site-light .text-white, .site-light .text-zinc-50, .site-light .text-zinc-100 { color: var(--ink); }
+.site-light .text-zinc-200, .site-light .text-zinc-300 { color: var(--ink-2); }
+.site-light .text-zinc-400, .site-light .text-zinc-500 { color: var(--ink-3); }
+.site-light .bg-zinc-900, .site-light .bg-zinc-900\/60, .site-light .bg-zinc-900\/70, .site-light .bg-zinc-950, .site-light .bg-zinc-800 { background-color: #ffffff; box-shadow: 0 1px 2px rgb(15 23 42 / .05); }
+.site-light .border-white\/5, .site-light .border-white\/10, .site-light .border-white\/20, .site-light .border-zinc-700, .site-light .border-zinc-800 { border-color: var(--line); }
+.site-light .divide-white\/10 > :not([hidden]) ~ :not([hidden]) { border-color: var(--line); }
+.site-light .hover\:bg-white\/5:hover, .site-light .hover\:bg-white\/10:hover { background-color: #f1f5f9; }
+.site-light .hover\:text-white:hover { color: var(--ink); }
+.site-light .on-dark, .site-light .on-dark .text-white { color: #ffffff; }
+.site-light input, .site-light textarea, .site-light select { color: var(--ink); }
 input[type="file"]::file-selector-button {
     margin-right: .6rem; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: .375rem;
     padding: .4rem .8rem; font-weight: 600; cursor: pointer;

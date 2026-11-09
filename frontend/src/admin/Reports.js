@@ -35,7 +35,8 @@ export default function Reports() {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               <Stat label="Tunai" value={rp(d.received.tunai)} testid="rep-cash" />
               <Stat label="Transfer" value={rp(d.received.transfer)} testid="rep-transfer" />
-              <Stat label="COD cair" value={rp(d.received.cod)} testid="rep-cod-received" />
+              {!!d.received.cod && <Stat label="COD barang cair (data lama)" value={rp(d.received.cod)} testid="rep-cod-received" />}
+              <Stat label="Ongkir diterima bengkel" value={rp(d.shipping)} sub={d.shipping_cod_courier ? `COD ongkir ke kurir ${rp(d.shipping_cod_courier)} (bukan uang bengkel)` : ""} testid="rep-shipping-received" />
               <Stat label="DP diterima (periode)" value={rp(d.dp_received)} testid="rep-dp" />
               <Stat label="Kas bersih (masuk − keluar)" value={rp(d.net_cash)} sub={`uang keluar/refund ${rp(d.refund_total)}`} tone="border-emerald-300 bg-emerald-50" testid="rep-net-cash" />
             </div>
@@ -43,7 +44,8 @@ export default function Reports() {
           <div>
             <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-600">3. Belum menjadi uang (posisi saat ini)</h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <Stat label="COD belum cair" value={rp(d.cod_pending_total)} sub={`${d.cod_pending.length} paket`} tone="border-amber-300 bg-amber-50" testid="rep-cod-pending" />
+              {!!d.cod_pending_total && <Stat label="COD barang data lama (belum cair)" value={rp(d.cod_pending_total)} sub={`${d.cod_pending.length} paket`} tone="border-amber-300 bg-amber-50" testid="rep-cod-pending" />}
+              <Stat label="Biaya ongkir dibayar bengkel" value={rp(d.shipping_expense)} sub="dari menu Biaya" testid="rep-shipping-expense" />
               <Stat label="Piutang pekerjaan" value={rp(d.receivables_total)} sub={`${d.receivables.length} nota`} testid="rep-receivables" />
               <Stat label="DP tertahan (belum selesai)" value={rp(d.dp_held_total)} sub={`${d.dp_held.length} transaksi`} testid="rep-dp-held" />
               <Stat label="Nilai persediaan (modal)" value={rp(d.inventory_value)} sub={`${d.inventory_units} pcs`} testid="rep-inventory" />
@@ -85,7 +87,7 @@ export default function Reports() {
             </Table>
           </Card>
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card title="COD belum cair">{d.cod_pending.map((c) => <p key={c.id} className="flex justify-between text-sm"><span><TxLink k="order" id={c.id} no={c.no} /> · {c.customer} · dikirim {fmtDateTime(c.shipped_at)}</span><b>{rp(c.amount)}</b></p>)}{!d.cod_pending.length && <p className="text-sm text-slate-500">Tidak ada.</p>}</Card>
+            {!!d.cod_pending.length && <Card title="COD barang data lama (belum cair)">{d.cod_pending.map((c) => <p key={c.id} className="flex justify-between text-sm"><span><TxLink k="order" id={c.id} no={c.no} /> · {c.customer} · dikirim {fmtDateTime(c.shipped_at)}</span><b>{rp(c.amount)}</b></p>)}{!d.cod_pending.length && <p className="text-sm text-slate-500">Tidak ada.</p>}</Card>}
             <Card title="Piutang & DP tertahan">
               {d.receivables.map((c) => <p key={c.id} className="flex justify-between text-sm"><span><TxLink k="job" id={c.id} no={c.no} /> · {c.customer} (piutang)</span><b>{rp(c.amount)}</b></p>)}
               {d.dp_held.map((c) => <p key={c.id} className="flex justify-between text-sm"><span><TxLink k={c.kind} id={c.id} no={c.no} /> · {c.customer} (DP dari {rp(c.total)})</span><b>{rp(c.paid)}</b></p>)}

@@ -16,8 +16,12 @@ async def recognized(coll, start, end):
     return await find_list(coll, {"recognized": True, "recognized_date": rng(start, end)}, [("recognized_date", 1)], 20000)
 
 
+def ship_to_bengkel(d):
+    return 0 if d.get("shipping_payer") in ("cod_kurir", "none") else d.get("shipping_cost", 0)
+
+
 def omzet_of(kind, d):
-    return d["total"] - (d.get("shipping_cost", 0) if kind == "order" else 0)
+    return d["total"] - (ship_to_bengkel(d) if kind == "order" else 0)
 
 
 @router.get("/reports/daily")
@@ -51,7 +55,8 @@ async def summary(start: str, end: str, user=Depends(require("owner"))):
         res["hpp"] += sum(d.get("hpp", 0) for d in docs)
         res["discount"] += sum(d.get("discount_amount", 0) for d in docs)
         if kind == "order":
-            res["shipping"] = sum(d.get("shipping_cost", 0) for d in docs)
+            res["shipping"] = sum(ship_to_bengkel(d) for d in docs)
+            res["shipping_cod_courier"] = sum(d.get("shipping_cost", 0) for d in docs if d.get("shipping_payer") == "cod_kurir")
         for d in docs:
             daily_rows[d["recognized_date"]][f"omzet_{kind}"] += omzet_of(kind, d)
             tx.append({"kind": kind, "id": d["id"], "no": d["no"], "date": d["recognized_date"],
@@ -104,13 +109,14 @@ async def summary(start: str, end: str, user=Depends(require("owner"))):
         daily_rows[e["date"]]["biaya"] += e["amount"]
     res["expenses"] = dict(by_cat)
     res["expense_total"] = sum(by_cat.values())
+    res["shipping_expense"] = sum(v for k, v in by_cat.items() if "ongkir" in k.lower() or "kirim" in k.lower())
     dmg = await find_list("damaged", {"date_local": rng(start, end)}, limit=20000)
     res["damaged_count"] = sum(d["qty"] for d in dmg)
     res["damage_loss"] = sum(costs.get(d["item_id"], 0) * d["qty"] for d in dmg if d["source"] == "stok")
     internal = await find_list("stock_mutations", {"kind": "pemakaian_internal", "date_local": rng(start, end)}, limit=20000)
     res["internal_use_cost"] = sum(costs.get(m["item_id"], 0) * -m["delta"] for m in internal)
     res["gross_profit"] = res["net_revenue"] - (res["hpp"] - ret_hpp_back)
-    res["net_profit"] = res["gross_profit"] - res["expense_total"] - res["damage_loss"] - res["internal_use_cost"] + kept
+    res["net_profit"] = res["gross_profit"] + res["shipping"] - res["expense_total"] - res["damage_loss"] - res["internal_use_cost"] + kept
     res["missing_cost_items"] = await db.items.count_documents({"active": True, "cost": {"$in": [0, None]}})
     res["daily"] = [{"date": k} | dict(v) for k, v in sorted(daily_rows.items())]
     res["transactions"] = tx

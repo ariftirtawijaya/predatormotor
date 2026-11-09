@@ -101,7 +101,7 @@ function GalleryItem({ g, i }) {
       <div className="relative aspect-[4/3]">
         <Img src={src} alt={g.title} className="h-full w-full object-cover" />
         {ba && (
-          <div className="absolute bottom-3 left-3 flex rounded-full bg-black/70 p-1 text-xs font-bold backdrop-blur">
+          <div className="on-dark absolute bottom-3 left-3 flex rounded-full bg-black/70 p-1 text-xs font-bold backdrop-blur">
             <button onClick={() => setAfter(false)} className={`rounded-full px-3 py-1 ${!after ? "accent-bg text-black" : "text-white"}`}>Sebelum</button>
             <button onClick={() => setAfter(true)} className={`rounded-full px-3 py-1 ${after ? "accent-bg text-black" : "text-white"}`}>Sesudah</button>
           </div>

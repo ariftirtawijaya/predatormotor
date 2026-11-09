@@ -10,7 +10,8 @@ import { JobList, JobNew } from "@/admin/Jobs";
 import JobDetail from "@/admin/JobDetail";
 import { OrderList, OrderNew } from "@/admin/Orders";
 import OrderDetail from "@/admin/OrderDetail";
-import { VehicleSearch, VehicleHistory } from "@/admin/Vehicles";
+import { VehicleSearch, VehicleHistory, CustomerHistory } from "@/admin/Vehicles";
+import ResetData from "@/admin/ResetData";
 import Items from "@/admin/Items";
 import Packages from "@/admin/Packages";
 import { Mutations, Damaged } from "@/admin/Stock";
@@ -41,6 +42,7 @@ const NAV = [
   { to: "/admin/pengguna", label: "Pengguna", icon: Users, owner: true },
   { to: "/admin/audit", label: "Audit Log", icon: ScrollText, owner: true },
   { to: "/admin/pengaturan/whatsapp", label: "Pengaturan · WhatsApp", icon: Settings, owner: true },
+  { to: "/admin/reset-data", label: "Pengaturan · Reset Data", icon: Settings, owner: true },
 ];
 
 const ROLE = { owner: "Owner", admin: "Admin", kasir: "Kasir" };
@@ -112,6 +114,7 @@ export default function AdminApp() {
             <Route path="penjualan/:id" element={<SaleDetail />} />
             <Route path="kendaraan" element={<VehicleSearch />} />
             <Route path="kendaraan/:id" element={<VehicleHistory />} />
+            <Route path="pelanggan/:id" element={<CustomerHistory />} />
             <Route path="barang" element={<Guard ok={isManager(user)}><Items /></Guard>} />
             <Route path="paket" element={<Guard ok={isManager(user)}><Packages /></Guard>} />
             <Route path="stok" element={<Guard ok={isManager(user)}><Mutations /></Guard>} />
@@ -124,6 +127,7 @@ export default function AdminApp() {
             <Route path="pengguna" element={<Guard ok={isOwner(user)}><UsersPage /></Guard>} />
             <Route path="audit" element={<Guard ok={isOwner(user)}><AuditPage /></Guard>} />
             <Route path="pengaturan/whatsapp" element={<Guard ok={isOwner(user)}><WhatsAppSettings /></Guard>} />
+            <Route path="reset-data" element={<Guard ok={isOwner(user)}><ResetData /></Guard>} />
             <Route path="*" element={<p>Halaman tidak ditemukan.</p>} />
           </Routes>
         </Shell>

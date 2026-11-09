@@ -200,7 +200,7 @@ async def move_many(pairs, kind, reason, user, ref_type=None, ref_id=None, ref_n
     return done
 
 
-async def add_payment(ref_type, doc, amount, method, kind, user, idem_key=None, note=None, direction="in"):
+async def add_payment(ref_type, doc, amount, method, kind, user, idem_key=None, note=None, direction="in", purpose=None):
     if amount <= 0:
         raise HTTPException(400, "Jumlah harus lebih dari 0")
     if method not in ("tunai", "transfer", "cod"):
@@ -208,7 +208,7 @@ async def add_payment(ref_type, doc, amount, method, kind, user, idem_key=None, 
     p = {
         "id": new_id(), "ref_type": ref_type, "ref_id": doc["id"], "ref_no": doc["no"],
         "amount": int(amount), "method": method, "kind": kind, "direction": direction, "note": note,
-        "idem_key": idem_key or new_id(), "user_id": user["id"], "user_name": user["name"],
+        "idem_key": idem_key or new_id(), "user_id": user["id"], "user_name": user["name"], "purpose": purpose,
         "created_at": iso(), "date_local": local_date(),
     }
     try:
@@ -226,7 +226,11 @@ async def recompute_paid(ref_type, ref_id):
     rows = await find_list("payments", {"ref_type": ref_type, "ref_id": ref_id})
     paid = sum(r["amount"] for r in rows if r["direction"] == "in")
     refunded = sum(r["amount"] for r in rows if r["direction"] == "out")
-    await db[COLL[ref_type]].update_one({"id": ref_id}, {"$set": {"paid": paid, "refunded": refunded}})
+    upd = {"paid": paid, "refunded": refunded}
+    if ref_type == "order":
+        upd["ship_paid"] = sum(r["amount"] for r in rows if r["direction"] == "in" and r.get("purpose") == "ongkir")
+        upd["goods_paid"] = paid - upd["ship_paid"]
+    await db[COLL[ref_type]].update_one({"id": ref_id}, {"$set": upd})
     return paid, refunded
 
 

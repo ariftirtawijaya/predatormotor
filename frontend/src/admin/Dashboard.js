@@ -23,7 +23,8 @@ export default function Dashboard() {
         <Stat label="Omzet pesanan WA hari ini" value={rp(t.types.order.omzet)} sub={`${t.types.order.count} pesanan diproses`} testid="dash-omzet-order" />
         <Stat label="Uang diterima tunai" value={rp(t.payments_in.tunai)} testid="dash-cash" />
         <Stat label="Uang diterima transfer" value={rp(t.payments_in.transfer)} testid="dash-transfer" />
-        <Stat label="Dana COD cair" value={rp(t.payments_in.cod)} sub={t.refunds ? `Pengembalian ${rp(t.refunds)}` : ""} testid="dash-cod" />
+        {!!t.payments_in.cod && <Stat label="Dana COD barang cair (data lama)" value={rp(t.payments_in.cod)} testid="dash-cod" />}
+        {!!t.refunds && <Stat label="Pengembalian uang hari ini" value={rp(t.refunds)} testid="dash-refunds" />}
       </div>
       {isManager(user) && (
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -33,7 +34,7 @@ export default function Dashboard() {
           </Card>
           <Card title="Keuangan">
             <div className="grid grid-cols-2 gap-3">
-              <Stat label="COD belum cair" value={rp(d.cod_pending_total)} testid="dash-cod-pending" />
+              {!!d.cod_pending_total && <Stat label="COD barang data lama (belum cair)" value={rp(d.cod_pending_total)} testid="dash-cod-pending" />}
               {isOwner(user) && <Stat label="Piutang pekerjaan" value={rp(d.receivables_total)} testid="dash-receivables" />}
               {isOwner(user) && <Stat label="Nilai persediaan (modal)" value={rp(d.inventory_value)} testid="dash-inventory" />}
               {isOwner(user) && <Link to="/admin/diskon"><Stat label="Diskon menunggu" value={d.pending_discounts} tone={d.pending_discounts ? "border-amber-400 bg-amber-50" : ""} testid="dash-pending-discounts" /></Link>}

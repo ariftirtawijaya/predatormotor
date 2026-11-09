@@ -25,55 +25,16 @@ async def provinces():
     return [{"name": p, "is_java": j} for p, j in PROVINCES]
 
 
-# ---------- Items ----------
-class ItemIn(BaseModel):
-    sku: str = Field(min_length=1, max_length=40)
-    name: str = Field(min_length=1, max_length=120)
-    category: str = ""
-    brand: str = ""
-    variant: str = ""
-    cost: int = Field(default=0, ge=0)
-    price: int = Field(default=0, ge=0)
-    active: bool = True
-    min_stock: int = Field(default=0, ge=0)
-    warranty_days: int = Field(default=0, ge=0)
-    initial_stock: int = Field(default=0, ge=0)
-
-
+# ---------- Items (varian; pembuatan/ubah ada di catalog_routes) ----------
 @router.get("/items")
 async def list_items(q: str = "", active_only: bool = False, user=Depends(require(*STAFF))):
     f = {}
     if q:
         rx = {"$regex": re.escape(q), "$options": "i"}
-        f["$or"] = [{"name": rx}, {"sku": rx}, {"brand": rx}, {"category": rx}]
+        f["$or"] = [{"name": rx}, {"sku": rx}, {"brand": rx}, {"category": rx}, {"variant": rx}]
     if active_only:
         f["active"] = True
     return strip_cost(await find_list("items", f, [("name", 1)], 3000), user)
-
-
-@router.post("/items")
-async def create_item(body: ItemIn, user=Depends(require(*MANAGERS))):
-    sku = body.sku.strip().upper()
-    if await db.items.find_one({"sku": sku}):
-        raise HTTPException(400, "Kode/SKU sudah dipakai")
-    d = body.model_dump(exclude={"initial_stock"}) | {"id": new_id(), "sku": sku, "unit": "pcs", "stock": 0, "created_at": iso()}
-    await db.items.insert_one(d)
-    if body.initial_stock:
-        await move_stock(d["id"], body.initial_stock, "stok_awal", "Stok awal", user, "item", d["id"], sku)
-    await audit(user, "buat_barang", "item", d["id"], after={"sku": sku, "name": d["name"], "price": d["price"], "cost": d["cost"]})
-    return await get_or_404("items", d["id"])
-
-
-@router.put("/items/{iid}")
-async def update_item(iid: str, body: ItemIn, user=Depends(require(*MANAGERS))):
-    old = await get_or_404("items", iid)
-    sku = body.sku.strip().upper()
-    if await db.items.find_one({"sku": sku, "id": {"$ne": iid}}):
-        raise HTTPException(400, "Kode/SKU sudah dipakai")
-    upd = body.model_dump(exclude={"initial_stock"}) | {"sku": sku}
-    await db.items.update_one({"id": iid}, {"$set": upd})
-    await audit(user, "ubah_barang", "item", iid, before={k: old.get(k) for k in upd}, after=upd)
-    return await get_or_404("items", iid)
 
 
 # ---------- Packages ----------
@@ -151,6 +112,15 @@ class CustomerIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     phone: str = ""
     notes: str = ""
+    address: str = Field(default="", max_length=500)
+    province: str = ""
+
+
+class CustomerNew(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    phone: str = Field(min_length=6, max_length=30)
+    address: str = Field(default="", max_length=500)
+    province: str = ""
 
 
 class VehicleIn(BaseModel):
@@ -203,10 +173,33 @@ async def list_customers(q: str = "", user=Depends(require(*STAFF))):
     return await find_list("customers", f, [("created_at", -1)], 300)
 
 
+@router.post("/customers")
+async def create_customer(body: CustomerNew, user=Depends(require(*STAFF))):
+    phone = valid_phone(body.phone)
+    ex = await db.customers.find_one({"phone": phone}, {"_id": 0})
+    if ex:
+        raise HTTPException(409, f"Nomor {phone} sudah terdaftar atas pelanggan {ex['name']}. Pilih pelanggan tersebut.")
+    d = {"id": new_id(), "name": body.name.strip(), "phone": phone, "notes": "", "address": body.address.strip(),
+         "province": body.province, "created_at": iso()}
+    await db.customers.insert_one(d)
+    d.pop("_id", None)
+    await audit(user, "buat_pelanggan", "customer", d["id"], after={"name": d["name"], "phone": phone})
+    return d
+
+
+def valid_phone(raw):
+    phone = norm_phone(raw)
+    if not re.fullmatch(r"628\d{7,11}", phone):
+        raise HTTPException(400, "Nomor WhatsApp tidak valid. Gunakan format 08…, 62…, atau +62…")
+    return phone
+
+
 @router.put("/customers/{cid}")
 async def update_customer(cid: str, body: CustomerIn, user=Depends(require(*STAFF))):
     old = await get_or_404("customers", cid)
-    upd = {"name": body.name.strip(), "phone": norm_phone(body.phone), "notes": body.notes}
+    upd = {"name": body.name.strip(), "phone": norm_phone(body.phone), "notes": body.notes, "address": body.address.strip(), "province": body.province}
+    if upd["phone"] and await db.customers.find_one({"phone": upd["phone"], "id": {"$ne": cid}}):
+        raise HTTPException(409, "Nomor sudah dipakai pelanggan lain")
     await db.customers.update_one({"id": cid}, {"$set": upd})
     await audit(user, "ubah_pelanggan", "customer", cid, before={k: old.get(k) for k in upd}, after=upd)
     return await get_or_404("customers", cid)
@@ -268,7 +261,7 @@ async def customer_history(cid: str, user=Depends(require(*STAFF))):
     vehicles = await find_list("vehicles", {"customer_id": cid})
     jobs = await find_list("jobs", {"customer_id": cid}, [("created_at", -1)])
     sales = await find_list("sales", {"customer_phone": c.get("phone") or "__none__"}, [("created_at", -1)], 100)
-    orders = await find_list("orders", {"customer.phone": c.get("phone") or "__none__"}, [("created_at", -1)], 100)
+    orders = await find_list("orders", {"$or": [{"customer.id": cid}, {"customer.phone": c.get("phone") or "__none__"}]}, [("created_at", -1)], 100)
     return strip_cost({"customer": c, "vehicles": vehicles, "jobs": jobs, "sales": sales, "orders": orders}, user)
 
 

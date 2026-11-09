@@ -19,6 +19,8 @@ def today(s):
 
 
 # ---- Report fix 1: returned COD order write-off ----
+@pytest.mark.skip(reason="COD harga barang dihapus (revisi COD ongkir); pesanan lama ditandai legacy_cod — lihat test_revisi_cod_varian_reset.py")
+
 class TestCodWriteOff:
     def test_cod_return_write_off(self, kasir, owner, admin, items, pkg):
         for sku in ("TEST-BILED-01", "TEST-SHROUD-01", "TEST-RELAY-01"):

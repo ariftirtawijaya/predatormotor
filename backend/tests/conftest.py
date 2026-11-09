@@ -56,17 +56,31 @@ TEST_ENV = {
 os.environ.update(TEST_ENV)
 
 
-def _wait(proc, log):
+def _wait(proc, log, base=None):
     for _ in range(120):
         if proc.poll() is not None:
             break
         try:
-            if requests.get(f"{BASE_URL}/api/health", timeout=1).status_code == 200:
+            if requests.get(f"{base or BASE_URL}/api/health", timeout=1).status_code == 200:
                 return
         except requests.RequestException:
             pass
         time.sleep(0.25)
     pytest.exit(f"Server tes gagal berjalan:\n{Path(log).read_text()[-3000:]}", returncode=3)
+
+
+def spawn_server(db_name, port, seed=True):
+    """Server tes tambahan dengan database sendiri (dipakai tes reset agar tidak mengosongkan DB tes utama)."""
+    assert db_name.startswith("predator_pytest_") and db_name != APP_DB
+    env = {**os.environ, "DB_NAME": db_name, "CORS_ORIGINS": f"http://127.0.0.1:{port}"}
+    log = os.path.join(UPLOAD_DIR, f"server-{port}.log")
+    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", str(port)],
+                            cwd=BACKEND, env=env, stdout=open(log, "w"), stderr=subprocess.STDOUT)
+    _wait(proc, log, f"http://127.0.0.1:{port}")
+    if seed:
+        subprocess.run([sys.executable, "seed_demo.py"], cwd=BACKEND, check=True, capture_output=True,
+                       env={**env, "ALLOW_DEMO_SEED": "true", "DEMO_ADMIN_PASSWORD": CREDS["admin"][1], "DEMO_KASIR_PASSWORD": CREDS["kasir"][1]})
+    return proc
 
 
 @pytest.fixture(scope="session", autouse=True)

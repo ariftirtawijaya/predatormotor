@@ -135,34 +135,36 @@ export function LinesTable({ doc, onEdit, onRemove }) {
 export function Totals({ doc }) {
   const R = ({ l, v, b, t }) => <div className={`flex justify-between py-1 ${b ? "text-base font-bold" : "text-sm"}`} data-testid={t}><span>{l}</span><span className="font-mono-num">{v}</span></div>;
   const rem = Math.max(doc.total - doc.paid, 0);
+  const order = doc.cod_model === "ongkir";
+  const codShip = doc.shipping_payer === "cod_kurir";
   return (
     <div className="divide-y divide-slate-100">
-      <R l="Subtotal" v={rp(doc.subtotal)} t="total-subtotal" />
+      <R l={order ? "Harga barang" : "Subtotal"} v={rp(doc.subtotal)} t="total-subtotal" />
       {doc.discount && <R l={`Diskon (${doc.discount.status === "approved" ? "disetujui" : doc.discount.status === "pending" ? "menunggu owner" : "ditolak"})`} v={`-${rp(doc.discount_amount)}`} t="total-discount" />}
-      {!!doc.shipping_cost && <R l="Ongkir" v={rp(doc.shipping_cost)} />}
-      <R l="Total" v={rp(doc.total)} b t="total-grand" />
-      <R l="Dibayar" v={rp(doc.paid)} t="total-paid" />
+      {!!doc.shipping_cost && <R l={codShip ? `Ongkir COD — dibayar ke kurir ${doc.courier || "J&T"}` : "Ongkir (dibayar ke bengkel)"} v={rp(doc.shipping_cost)} t="total-shipping" />}
+      <R l={order ? "Tagihan ke bengkel" : "Total"} v={rp(doc.total)} b t="total-grand" />
+      <R l={order ? "Dibayar ke bengkel" : "Dibayar"} v={rp(doc.paid)} t="total-paid" />
       {!!doc.refunded && <R l="Dikembalikan" v={rp(doc.refunded)} t="total-refunded" />}
-      <R l="Sisa" v={doc.status === "Batal" || doc.ship_status === "Batal" ? "— (batal)" : rp(rem)} b t="total-remaining" />
+      <R l={order ? "Sisa tagihan ke bengkel" : "Sisa"} v={doc.status === "Batal" || doc.ship_status === "Batal" ? "— (batal)" : rp(rem)} b t="total-remaining" />
     </div>
   );
 }
 
-export function PaymentBox({ kind, doc, onDone, cod }) {
-  const rem = Math.max(doc.total - doc.paid, 0);
+export function PaymentBox({ kind, doc, onDone, cod, purpose, due }) {
+  const rem = due ?? Math.max(doc.total - doc.paid, 0);
   const [f, setF] = useState({ amount: "", method: cod ? "cod" : "tunai", note: "" });
   const [key, setKey] = useState(newKey());
   const [busy, setBusy] = useState(false);
-  if (doc.total <= 0) return <p className="text-sm text-slate-500" data-testid="payment-no-bill">Belum ada tagihan.</p>;
-  if (rem <= 0) return <p className="text-sm font-semibold text-emerald-700" data-testid="payment-paid-full">Lunas</p>;
+  if (doc.total <= 0 && due === undefined) return <p className="text-sm text-slate-500" data-testid="payment-no-bill">Belum ada tagihan.</p>;
+  if (rem <= 0) return <p className="text-sm font-semibold text-emerald-700" data-testid={purpose ? `payment-paid-full-${purpose}` : "payment-paid-full"}>Lunas</p>;
   const submit = async () => {
     setBusy(true);
-    const r = await act(() => api.post(`/tx/${kind}/${doc.id}/payments`, { ...f, amount: Number(f.amount), idem_key: key }), "Pembayaran dicatat");
+    const r = await act(() => api.post(`/tx/${kind}/${doc.id}/payments`, { ...f, amount: Number(f.amount), idem_key: key, ...(purpose ? { purpose } : {}) }), "Pembayaran dicatat");
     setBusy(false);
     if (r) { setKey(newKey()); setF({ ...f, amount: "" }); onDone(r); }
   };
   return (
-    <div className="space-y-2" data-testid="payment-box">
+    <div className="space-y-2" data-testid={purpose ? `payment-box-${purpose}` : "payment-box"}>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Jumlah"><NumInput value={f.amount} onChange={(v) => setF({ ...f, amount: v })} data-testid="payment-amount-input" /></Field>
         <Field label="Metode">

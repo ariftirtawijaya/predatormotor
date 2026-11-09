@@ -263,19 +263,22 @@ async def nota_message(kind, doc):
     if doc.get("discount_amount"):
         rows.append(f"Diskon: -{rp(doc['discount_amount'])}")
     if doc.get("shipping_cost"):
-        rows.append(f"Ongkir: {rp(doc['shipping_cost'])}")
-    rows.append(f"*Total: {rp(doc['total'])}*")
+        if doc.get("shipping_payer") == "cod_kurir":
+            rows.append(f"Ongkir: {rp(doc['shipping_cost'])} (COD ongkir — dibayar ke kurir {doc.get('courier') or 'J&T'} saat paket diterima, bukan ke bengkel)")
+        else:
+            rows.append(f"Ongkir: {rp(doc['shipping_cost'])} (dibayar ke bengkel)")
+    rows.append(f"*{'Total tagihan bengkel' if kind == 'order' else 'Total'}: {rp(doc['total'])}*")
     ins = [p for p in pays if p["direction"] == "in"]
     if ins:
         rows += ["", "Pembayaran:"] + [f"- {fmt_dt(p['created_at'])} · {p['kind']} · {p['method']}: {rp(p['amount'])}" for p in ins]
-    rows.append(f"Total dibayar: {rp(doc['paid'])}")
+    rows.append(f"Total dibayar ke bengkel: {rp(doc['paid'])}" if kind == "order" else f"Total dibayar: {rp(doc['paid'])}")
     if doc.get("refunded"):
         rows.append(f"Dikembalikan: {rp(doc['refunded'])}")
     if not cancelled and doc["total"] > 0:
         rem = max(doc["total"] - doc["paid"], 0)
-        rows.append(f"*Sisa tagihan: {rp(rem)}*" if rem else "*Status pembayaran: LUNAS*")
-    if kind == "order" and doc.get("payment_type") == "cod" and not cancelled:
-        rows.append("Pembayaran: COD (bayar di tempat)")
+        rows.append((f"*Sisa tagihan{' ke bengkel' if kind == 'order' else ''}: {rp(rem)}*") if rem else "*Status pembayaran: LUNAS*")
+    if kind == "order" and doc.get("legacy_cod") and not cancelled:
+        rows.append("Catatan: pesanan data lama (COD barang, sebelum koreksi aturan COD ongkir)")
     if doc.get("public_token"):
         rows += ["", f"Lihat nota: {PUBLIC_SITE_URL}/nota/{doc['public_token']}"]
     rows += ["", "Terima kasih."]

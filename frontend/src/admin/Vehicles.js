@@ -26,11 +26,28 @@ export function VehicleSearch() {
               <p className="text-sm text-slate-600">{r.vehicle.brand} {r.vehicle.model} · {r.customer?.name} · {r.customer?.phone}</p>
             </Link>
           ) : (
-            <div key={i} className="rounded-md border border-slate-200 bg-white p-3 text-sm" data-testid={`customer-result-${i}`}>{r.customer.name} · {r.customer.phone} <span className="text-slate-500">(tanpa kendaraan terdaftar)</span></div>
+            <Link key={i} to={`/admin/pelanggan/${r.customer.id}`} className="block rounded-md border border-slate-200 bg-white p-3 text-sm hover:border-sky-400" data-testid={`customer-result-${i}`}>{r.customer.name} · {r.customer.phone} <span className="text-slate-500">(tanpa kendaraan terdaftar)</span></Link>
           )
         ))}
         {q.length >= 2 && !res.length && <p className="text-sm text-slate-500">Tidak ditemukan.</p>}
       </div>
+    </div>
+  );
+}
+
+export function CustomerHistory() {
+  const { id } = useParams();
+  const [h] = useLoad(`/customers/${id}/history`);
+  if (!h) return <p>Memuat…</p>;
+  const { customer: c, vehicles, jobs, sales, orders } = h;
+  const Row = ({ to, no, at, total, extra }) => <p className="flex justify-between border-b border-slate-100 py-1 text-sm"><span><Link to={to} className="text-sky-800 underline">{no}</Link> · {fmtDateTime(at)}{extra && ` · ${extra}`}</span><b className="font-mono-num">{rp(total)}</b></p>;
+  return (
+    <div className="max-w-4xl space-y-4" data-testid="customer-history">
+      <PageHead title={c.name} sub={`${c.phone || "tanpa nomor"}${c.address ? ` · ${c.address}${c.province ? ` (${c.province})` : ""}` : ""}`} />
+      <Card title={`Pesanan WhatsApp (${orders.length})`} data-testid="customer-orders">{orders.map((o) => <Row key={o.id} to={`/admin/pesanan/${o.id}`} no={o.no} at={o.created_at} total={o.total} extra={o.ship_status} />)}{!orders.length && <p className="text-sm text-slate-500">Belum ada.</p>}</Card>
+      <Card title={`Pekerjaan bengkel (${jobs.length})`}>{jobs.map((j) => <Row key={j.id} to={`/admin/pekerjaan/${j.id}`} no={j.no} at={j.created_at} total={j.total} extra={j.status} />)}{!jobs.length && <p className="text-sm text-slate-500">Belum ada.</p>}</Card>
+      <Card title={`Penjualan langsung (${sales.length})`}>{sales.map((s) => <Row key={s.id} to={`/admin/penjualan/${s.id}`} no={s.no} at={s.created_at} total={s.total} />)}{!sales.length && <p className="text-sm text-slate-500">Belum ada.</p>}</Card>
+      <Card title={`Kendaraan (${vehicles.length})`}>{vehicles.map((v) => <p key={v.id} className="text-sm"><Link to={`/admin/kendaraan/${v.id}`} className="font-mono-num text-sky-800 underline">{v.plate}</Link> {v.brand} {v.model}</p>)}{!vehicles.length && <p className="text-sm text-slate-500">Tidak wajib untuk pelanggan pesanan WA.</p>}</Card>
     </div>
   );
 }

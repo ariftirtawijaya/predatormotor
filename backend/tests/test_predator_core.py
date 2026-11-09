@@ -1,5 +1,6 @@
 """Predator Autolight backend regression: auth/RBAC, jobs, packages stock, discount, DP, cancel, sales, orders, returns, claims, stock, CMS, media."""
 import io
+import pytest
 import random
 import threading
 from conftest import BASE_URL, CREDS, uid, stock_of, ensure_stock
@@ -222,11 +223,15 @@ class TestOrders:
         kasir.post(f"{B}/tx/order/{o['id']}/payments", json={"amount": 100000, "method": "transfer"})
         assert stock_of(owner, iid) == s0
         assert kasir.post(f"{B}/orders/{o['id']}/ship", json={}).status_code == 400
-        kasir.post(f"{B}/tx/order/{o['id']}/payments", json={"amount": 80000, "method": "transfer"})
+        assert kasir.post(f"{B}/tx/order/{o['id']}/payments", json={"amount": 80000, "method": "transfer"}).status_code == 400
+        kasir.post(f"{B}/tx/order/{o['id']}/payments", json={"amount": 50000, "method": "transfer"})
         assert stock_of(owner, iid) == s0 - 1
+        assert kasir.post(f"{B}/orders/{o['id']}/ship", json={}).status_code == 400  # ongkir di muka belum dibayar
+        kasir.post(f"{B}/tx/order/{o['id']}/payments", json={"amount": 30000, "method": "transfer", "purpose": "ongkir"})
         r = kasir.post(f"{B}/orders/{o['id']}/ship", json={"resi": "JT123"})
         assert r.status_code == 200 and r.json()["ship_status"] == "Dikirim"
 
+    @pytest.mark.skip(reason="COD harga barang dihapus (revisi COD ongkir)")
     def test_cod_jatim_and_return(self, kasir, owner, admin, items, pkg):
         for sku in ("TEST-BILED-01", "TEST-SHROUD-01", "TEST-RELAY-01"):
             ensure_stock(owner, items[sku]["id"], 2)
@@ -252,6 +257,7 @@ class TestOrders:
         assert s2["received"]["cod"] == recv_before
         assert not any(x["id"] == o["id"] for x in kasir.get(f"{B}/orders?cod_pending=true").json())
 
+    @pytest.mark.skip(reason="COD harga barang dihapus (revisi COD ongkir)")
     def test_cod_settle(self, kasir, owner, items):
         iid = items["TEST-RELAY-01"]["id"]
         ensure_stock(owner, iid, 1)
