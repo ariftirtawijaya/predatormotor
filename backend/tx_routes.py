@@ -49,6 +49,13 @@ async def build_line(inp: LineIn, user):
             raise HTTPException(400, f"Paket {p['name']} nonaktif dan tidak dapat dipilih untuk transaksi baru")
         comps, opts = package_components(p, inp.option_ids)
         items = {i["id"]: i for i in await find_list("items", {"id": {"$in": [c["item_id"] for c in comps + p["components"]]}})}
+        missing = [c["item_id"] for c in comps if c["item_id"] not in items]
+        if missing:
+            raise HTTPException(400, f"Paket {p['name']} tidak dapat dipilih: ada komponen yang sudah tidak ada di Master Barang. Ubah paketnya terlebih dahulu.")
+        off = list(dict.fromkeys(f"{items[c['item_id']]['name']} ({items[c['item_id']]['sku']})" for c in comps if not items[c["item_id"]].get("active", True)))
+        if off:
+            raise HTTPException(400, f"Paket {p['name']} tidak dapat dipilih: komponen {', '.join(off)} berstatus nonaktif. "
+                                     "Aktifkan barangnya, pilih opsi pengganti lain, atau ubah paketnya.")
         for o in opts:
             o["replaces_name"] = items.get(o.get("replaces") or "", {}).get("name")
             o["items_names"] = [f"{items[c['item_id']]['name']} x{c['qty']}" for c in o["items"] if c["item_id"] in items]

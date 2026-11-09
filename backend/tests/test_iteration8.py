@@ -176,7 +176,7 @@ def test_impor_gagal_di_tengah_tanpa_data_parsial(replset):
 
 # ---------- 2. Hapus data khusus owner ----------
 class TestDelete:
-    def test_hapus_produk_belum_dipakai_dan_izin(self, owner, admin, kasir):
+    def test_hapus_produk_belum_dipakai_dan_izin(self, owner, admin, kasir, replset):
         p, it = simple(owner)
         assert admin.get(f"{B}/admin/delete-check/product/{p['id']}").status_code == 403
         assert admin.delete(f"{B}/products/{p['id']}", params={"confirm": p["name"]}).status_code == 403
@@ -188,7 +188,7 @@ class TestDelete:
         assert not mdb().items.find_one({"id": it["id"]}) and mdb().deleted_records.find_one({"ref_id": it["id"]})
         assert mdb().audit_logs.find_one({"action": "hapus_produk", "ref_id": p["id"]})
 
-    def test_stok_tersisa_ditolak_lalu_nol_boleh_mutasi_tetap(self, owner):
+    def test_stok_tersisa_ditolak_lalu_nol_boleh_mutasi_tetap(self, owner, replset):
         p, it = simple(owner, stock=4)
         chk = owner.get(f"{B}/admin/delete-check/product/{p['id']}").json()
         assert not chk["can_delete"] and any("stok 4 pcs" in r for r in chk["reasons"])
@@ -197,7 +197,7 @@ class TestDelete:
         assert owner.delete(f"{B}/products/{p['id']}", params={"confirm": p["name"]}).status_code == 200
         assert mdb().stock_mutations.count_documents({"item_id": it["id"]}) == 2
 
-    def test_dipakai_paket_lalu_paket_dihapus(self, owner):
+    def test_dipakai_paket_lalu_paket_dihapus(self, owner, replset):
         _, base = simple(owner)
         p2, alt = simple(owner)
         pk = owner.post(f"{B}/packages", json={"name": f"TEST Pk {uid()}", "price": 1000, "components": [{"item_id": base["id"], "qty": 1}],
@@ -236,7 +236,7 @@ class TestDelete:
         assert not chk["can_delete"] and "Nonaktifkan" in chk["reasons"][0]
         assert owner.delete(f"{B}/packages/{pkg['id']}", params={"confirm": pkg["name"]}).status_code == 409
 
-    def test_hapus_varian_terakhir_diarahkan_ke_hapus_produk(self, owner):
+    def test_hapus_varian_terakhir_diarahkan_ke_hapus_produk(self, owner, replset):
         k = uid().upper()
         r = owner.post(f"{B}/products", json={"code": f"V{k}", "name": f"TEST V {k}", "variants": [
             {"variant": "Merah", "price": 1}, {"variant": "Biru", "price": 1}]}).json()

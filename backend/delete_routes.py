@@ -1,6 +1,8 @@
+import os
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from core import db, iso, new_id, find_list, get_or_404, require, audit
+from pymongo.errors import PyMongoError
+from core import db, client, iso, new_id, find_list, get_or_404, require, audit, is_replica_set
 
 router = APIRouter(prefix="/api")
 OWNER = require("owner")
@@ -13,36 +15,55 @@ class ActiveIn(BaseModel):
     active: bool
 
 
-async def _archive(user, ref_type, doc, extra=None):
+async def _archive(user, ref_type, doc, extra=None, session=None):
     await db.deleted_records.insert_one({"id": new_id(), "ref_type": ref_type, "ref_id": doc["id"], "name": doc.get("name"),
                                          "data": doc, "extra": extra, "deleted_by": user["name"], "deleted_by_id": user["id"],
-                                         "deleted_at": iso()})
+                                         "deleted_at": iso()}, session=session)
 
 
-async def package_blockers(p):
+def _fault(stage):
+    if os.environ.get("DELETE_TEST_FAIL_AT") == stage and os.environ.get("DB_NAME", "").startswith("predator_pytest_"):
+        raise RuntimeError(f"Kegagalan buatan (uji) pada tahap {stage}")
+
+
+async def _in_transaction(fn):
+    """Hapus produk/varian + arsip + audit: berhasil seluruhnya atau batal seluruhnya."""
+    if not await is_replica_set():
+        raise HTTPException(503, "Penghapusan barang membutuhkan MongoDB mode replica set (transaksi). Tidak ada data yang dihapus. Lihat README.")
+    try:
+        async with await client.start_session() as s:
+            return await s.with_transaction(fn)
+    except HTTPException:
+        raise
+    except (PyMongoError, RuntimeError):
+        raise HTTPException(500, "Penghapusan gagal di tengah proses. Seluruh perubahan dibatalkan — tidak ada data yang terhapus.")
+
+
+async def package_blockers(p, session=None):
     reasons = []
     for coll, label in (("jobs", "nota pekerjaan bengkel"), ("orders", "pesanan WhatsApp")):
-        n = await db[coll].count_documents({"lines.package_id": p["id"]})
+        n = await db[coll].count_documents({"lines.package_id": p["id"]}, session=session)
         if n:
             reasons.append(f"Paket dipakai pada {n} {label} (semua status). Nonaktifkan saja agar tidak bisa dipilih lagi.")
     return reasons
 
 
-async def item_blockers(it):
+async def item_blockers(it, session=None):
     iid, reasons = it["id"], []
     q = {"$or": [{"lines.item_id": iid}, {"lines.components.item_id": iid}, {"returns.items.item_id": iid}, {"claim.old_part.item_id": iid}]}
     for coll, label in TX:
-        n = await db[coll].count_documents(q)
+        n = await db[coll].count_documents(q, session=session)
         if n:
             reasons.append(f"Dipakai pada {n} {label} (semua status)")
-    n = await db.damaged.count_documents({"item_id": iid})
+    n = await db.damaged.count_documents({"item_id": iid}, session=session)
     if n:
         reasons.append(f"Tercatat pada {n} catatan barang rusak")
-    n = await db.stock_mutations.count_documents({"item_id": iid, "kind": {"$nin": list(SAFE_MUTATIONS)}})
+    n = await db.stock_mutations.count_documents({"item_id": iid, "kind": {"$nin": list(SAFE_MUTATIONS)}}, session=session)
     if n:
         reasons.append(f"Punya {n} riwayat mutasi stok dari transaksi/pemakaian yang harus dipertahankan")
-    pk = await find_list("packages", {"$or": [{"components.item_id": iid}, {"options.items.item_id": iid}, {"options.replaces": iid}]})
-    packages = [{"id": p["id"], "name": p["name"], "can_delete": not await package_blockers(p)} for p in pk]
+    pk = await db.packages.find({"$or": [{"components.item_id": iid}, {"options.items.item_id": iid}, {"options.replaces": iid}]},
+                                {"_id": 0}, session=session).to_list(500)
+    packages = [{"id": p["id"], "name": p["name"], "can_delete": not await package_blockers(p, session)} for p in pk]
     for p in packages:
         reasons.append(f"Varian dipakai Paket {p['name']} (komponen dasar/opsi). " +
                        ("Hapus paket itu terlebih dahulu." if p["can_delete"] else "Paket itu sudah dipakai transaksi, jadi ubah komponennya atau Nonaktifkan barang ini."))
@@ -103,43 +124,76 @@ async def delete_check(kind: str, rid: str, user=Depends(OWNER)):
     raise HTTPException(400, "Jenis data tidak valid")
 
 
-async def _delete_item(it, user):
-    res = await db.items.delete_one({"id": it["id"], "stock": 0})
+async def _delete_item(it, user, session):
+    res = await db.items.delete_one({"id": it["id"], "stock": 0}, session=session)
     if not res.deleted_count:
         raise HTTPException(409, "Stok barang berubah. Muat ulang lalu periksa lagi.")
-    await _archive(user, "item", it, {"mutations_kept": await db.stock_mutations.count_documents({"item_id": it["id"]})})
+    _fault("after_item_delete")
+    await _archive(user, "item", it, {"mutations_kept": await db.stock_mutations.count_documents({"item_id": it["id"]}, session=session)}, session)
+
+
+async def _item_reasons(it, session):
+    reasons, _ = await item_blockers(it, session)
+    if await db.items.count_documents({"product_id": it.get("product_id")}, session=session) <= 1:
+        reasons.append("Ini satu-satunya barang di produk ini. Gunakan Hapus Produk.")
+    return reasons
 
 
 @router.delete("/items/{iid}")
 async def delete_item(iid: str, confirm: str = "", user=Depends(OWNER)):
     it = await get_or_404("items", iid, "Barang tidak ditemukan")
     _confirm(it["name"], confirm)
-    reasons, _ = await item_blockers(it)
-    if await db.items.count_documents({"product_id": it.get("product_id")}) <= 1:
-        reasons.append("Ini satu-satunya barang di produk ini. Gunakan Hapus Produk.")
+    reasons = await _item_reasons(it, None)
     if reasons:
         raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(reasons))
-    await _delete_item(it, user)
-    await audit(user, "hapus_varian", "item", iid, before={"sku": it["sku"], "name": it["name"]})
+
+    async def run(s):
+        cur = await db.items.find_one({"id": iid}, {"_id": 0}, session=s)
+        if not cur:
+            raise HTTPException(404, "Barang sudah tidak ada")
+        again = await _item_reasons(cur, s)
+        if again:
+            raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(again))
+        await _delete_item(cur, user, s)
+        _fault("before_audit")
+        await audit(user, "hapus_varian", "item", iid, before={"sku": cur["sku"], "name": cur["name"]}, session=s)
+
+    await _in_transaction(run)
     return {"ok": True}
+
+
+async def _product_reasons(variants, session):
+    reasons = []
+    for v in variants:
+        reasons += [f"{v['name']} ({v['sku']}): {x}" for x in (await item_blockers(v, session))[0]]
+    return reasons
 
 
 @router.delete("/products/{pid}")
 async def delete_product(pid: str, confirm: str = "", user=Depends(OWNER)):
     p = await get_or_404("products", pid, "Produk tidak ditemukan")
     _confirm(p["name"], confirm)
-    variants = await find_list("items", {"product_id": pid})
-    reasons = []
-    for v in variants:
-        reasons += [f"{v['name']} ({v['sku']}): {x}" for x in (await item_blockers(v))[0]]
+    reasons = await _product_reasons(await find_list("items", {"product_id": pid}), None)
     if reasons:
         raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(reasons))
-    for v in variants:
-        await _delete_item(v, user)
-    await db.products.delete_one({"id": pid})
-    await _archive(user, "product", p, {"variants": [v["sku"] for v in variants]})
-    await audit(user, "hapus_produk", "product", pid, before={"code": p["code"], "name": p["name"], "variants": [v["sku"] for v in variants]})
-    return {"ok": True, "variants_deleted": len(variants)}
+
+    async def run(s):
+        variants = await db.items.find({"product_id": pid}, {"_id": 0}, session=s).to_list(1000)
+        again = await _product_reasons(variants, s)
+        if again:
+            raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(again))
+        for v in variants:
+            await _delete_item(v, user, s)
+        _fault("after_variants")
+        if not (await db.products.delete_one({"id": pid}, session=s)).deleted_count:
+            raise HTTPException(404, "Produk sudah tidak ada")
+        await _archive(user, "product", p, {"variants": [v["sku"] for v in variants]}, s)
+        _fault("before_audit")
+        await audit(user, "hapus_produk", "product", pid, before={"code": p["code"], "name": p["name"], "variants": [v["sku"] for v in variants]},
+                    session=s)
+        return len(variants)
+
+    return {"ok": True, "variants_deleted": await _in_transaction(run)}
 
 
 @router.delete("/packages/{pid}")

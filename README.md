@@ -92,7 +92,8 @@ Opsi B: isi `OWNER_EMAIL` & `OWNER_PASSWORD` di `backend/.env` — hanya dipakai
 Owner lalu membuat akun admin/kasir dari menu **Pengguna**.
 
 ### Impor Excel & replica set MongoDB
-- `docker-compose.yml` menjalankan `mongo --replSet rs0`; healthcheck otomatis melakukan `rs.initiate` pada start pertama. `backend/.env` wajib `MONGO_URL="mongodb://mongo:27017/?replicaSet=rs0"`.
+- `docker-compose.yml` menjalankan `mongo --replSet rs0`; healthcheck otomatis melakukan `rs.initiate` pada start pertama. Service backend memaksa `MONGO_URL: mongodb://mongo:27017/?replicaSet=rs0` (menimpa isi `backend/.env`); `backend/.env.example` memakai nilai yang sama: `MONGO_URL="mongodb://mongo:27017/?replicaSet=rs0"`.
+- Hapus produk/varian (beserta arsip & audit log) juga berjalan dalam satu transaksi: berhasil seluruhnya atau batal seluruhnya; tanpa replica set ditolak (503).
 - **VPS yang sudah berjalan tanpa replica set:** `./scripts/backup.sh` → `git pull` → ubah `MONGO_URL` seperti di atas → `docker compose up -d --build` → `docker compose ps` (mongo *healthy*) → `docker compose exec mongo mongosh --quiet --eval 'rs.status().ok'` harus `1`. Data di volume `mongo_data` tetap dipakai.
 - Tanpa replica set, pratinjau impor tetap jalan tetapi tombol Simpan ditolak (HTTP 503) — tidak ada data parsial.
 - **Sebelum mengimpor data asli**, jalankan uji integrasi terhadap replica set sungguhan (container sementara, data aplikasi tidak disentuh): `./scripts/test-replset.sh`. Pastikan tidak ada tes impor yang berstatus SKIPPED.

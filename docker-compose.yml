@@ -18,6 +18,8 @@ services:
     env_file: ./backend/.env
     environment:
       PUBLIC_SITE_URL: https://${SITE_DOMAIN}
+      # Dipaksa di sini agar backend selalu memakai replica set (transaksi impor & hapus barang), apa pun isi backend/.env.
+      MONGO_URL: mongodb://mongo:27017/?replicaSet=rs0
     volumes:
       - uploads:/data/uploads
     depends_on:

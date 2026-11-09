@@ -75,6 +75,11 @@ function PackagePreview({ pkg, opts, setOpts }) {
       {!!add.length && <div><p className="text-xs font-semibold uppercase text-slate-500">Tambah barang</p>{add.map(opt)}</div>}
       {!!chosen.length && <p className="rounded bg-white p-2 text-xs" data-testid="linepicker-package-result">Dipasang: {comps.map((c) => `${c.name} x${c.qty}`).join(", ")}</p>}
       <p className="font-semibold">Harga: <span className="font-mono-num" data-testid="linepicker-package-price">{rp(price)}</span></p>
+      {comps.some((c) => c.active === false) && (
+        <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900" data-testid="linepicker-package-inactive">
+          Tidak dapat dipilih: komponen {comps.filter((c) => c.active === false).map((c) => c.name).join(", ")} nonaktif. Aktifkan barangnya, pilih opsi pengganti lain, atau ubah paketnya.
+        </p>
+      )}
     </div>
   );
 }
@@ -100,7 +105,7 @@ export function LinePicker({ onAdd, garansi, busy }) {
             {(pkgs || []).filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name} — {rp(p.price)}</option>)}
           </Select>
           {pkg && <PackagePreview pkg={pkg} opts={opts} setOpts={setOpts} />}
-          <Btn type="button" disabled={!pid || busy} onClick={() => { onAdd({ type: "package", package_id: pid, option_ids: opts, qty: 1 }); setPid(""); setOpts([]); }} data-testid="linepicker-add-package">Tambah paket</Btn>
+          <Btn type="button" disabled={!pid || busy || (pkg && packageResult(pkg, opts).comps.some((c) => c.active === false))} onClick={() => { onAdd({ type: "package", package_id: pid, option_ids: opts, qty: 1 }); setPid(""); setOpts([]); }} data-testid="linepicker-add-package">Tambah paket</Btn>
         </div>
       )}
       {tab === "item" && (
