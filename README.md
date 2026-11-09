@@ -91,6 +91,14 @@ Password diminta secara interaktif (tidak tersimpan di riwayat shell/berkas).
 Opsi B: isi `OWNER_EMAIL` & `OWNER_PASSWORD` di `backend/.env` — hanya dipakai bila belum ada pengguna sama sekali. Setelah login pertama, **kosongkan kembali** kedua nilai itu.
 Owner lalu membuat akun admin/kasir dari menu **Pengguna**.
 
+### Impor Excel & replica set MongoDB
+- `docker-compose.yml` menjalankan `mongo --replSet rs0`; healthcheck otomatis melakukan `rs.initiate` pada start pertama. `backend/.env` wajib `MONGO_URL="mongodb://mongo:27017/?replicaSet=rs0"`.
+- **VPS yang sudah berjalan tanpa replica set:** `./scripts/backup.sh` → `git pull` → ubah `MONGO_URL` seperti di atas → `docker compose up -d --build` → `docker compose ps` (mongo *healthy*) → `docker compose exec mongo mongosh --quiet --eval 'rs.status().ok'` harus `1`. Data di volume `mongo_data` tetap dipakai.
+- Tanpa replica set, pratinjau impor tetap jalan tetapi tombol Simpan ditolak (HTTP 503) — tidak ada data parsial.
+- **Sebelum mengimpor data asli**, jalankan uji integrasi terhadap replica set sungguhan (container sementara, data aplikasi tidak disentuh): `./scripts/test-replset.sh`. Pastikan tidak ada tes impor yang berstatus SKIPPED.
+- Validasi pratinjau (seluruh file sekaligus, spasi & huruf besar/kecil dinormalisasi): nama produk sama dengan kode berbeda, kode sama dengan nama/kategori/merek berbeda, SKU ganda, nama varian ganda, campuran baris tanpa/dengan nama varian, dan bentrok dengan produk/varian di database. Saat Simpan, server memeriksa ulang di dalam transaksi; bila data berubah sejak pratinjau → ditolak (409), pratinjau ulang.
+- Impor ulang file yang sama aman: varian yang ada tidak digandakan dan `stok_awal` diabaikan untuk varian lama.
+
 ### Backup & restore
 ```bash
 chmod +x scripts/*.sh
@@ -141,8 +149,8 @@ Data & foto tetap aman di volume.
 
 
 ## 6. Batasan yang diketahui
-- MongoDB dijalankan tanpa replica set, jadi tidak memakai multi-document transaction; konsistensi dijaga dengan operasi atomik per dokumen, kunci status, kunci idempoten, dan rollback kompensasi (tercatat sebagai mutasi "Batal otomatis").
+- MongoDB di Docker berjalan sebagai **replica set satu node** (`rs0`). Impor Excel memakai multi-document transaction (semua atau tidak sama sekali). Alur transaksi lain (nota, pembayaran, stok) tetap memakai operasi atomik per dokumen, kunci status, kunci idempoten, dan rollback kompensasi (tercatat sebagai mutasi "Batal otomatis").
 - SEO dirender di sisi klien (SPA). Judul/deskripsi/OG diatur per halaman, tetapi crawler yang tidak menjalankan JavaScript (sebagian pratinjau tautan WhatsApp/Facebook) mungkin hanya melihat judul default `index.html`.
 - Pratinjau CMS menampilkan seluruh draft semua bagian sekaligus.
-- Satu barang per baris; varian dikelola sebagai barang/SKU terpisah.
+- Produk induk + varian (SKU & stok per varian). Produk tanpa varian disimpan sebagai satu barang internal tanpa nama varian.
 - Belum ada impor data dari sistem lama (source lama belum diberikan).

@@ -70,9 +70,9 @@ class TestJobs:
             assert j["status"] == "Masuk" and j["no"].startswith("NB-")
 
     def test_package_complete_once(self, owner, kasir, items, pkg):
-        need = {"TEST-BILED-01": 2, "TEST-SHROUD-01": 2, "TEST-RELAY-01": 1, "TEST-SHROUD-RGB": 2}
+        need = {"TEST-BILED-01": 2, "TEST-SHROUD-01": 0, "TEST-RELAY-01": 1, "TEST-SHROUD-RGB": 2}
         for sku, q in need.items():
-            ensure_stock(owner, items[sku]["id"], q * 2)
+            ensure_stock(owner, items[sku]["id"], max(q, 1) * 2)
         before = {sku: stock_of(owner, items[sku]["id"]) for sku in need}
         j = new_job(kasir, [pkg_line(pkg)])
         assert j["total"] == 1850000

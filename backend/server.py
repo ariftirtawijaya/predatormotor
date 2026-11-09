@@ -13,13 +13,14 @@ import report_routes
 import wa_routes
 import catalog_routes
 import reset_routes
+import delete_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("predator")
 
 app = FastAPI(title="Predator Autolight API", docs_url=None if os.environ.get("DISABLE_DOCS") == "true" else "/api/docs",
               openapi_url="/api/openapi.json")
-for r in (auth_routes, cms_routes, master_routes, tx_routes, report_routes, wa_routes, catalog_routes, reset_routes):
+for r in (auth_routes, cms_routes, master_routes, tx_routes, report_routes, wa_routes, catalog_routes, reset_routes, delete_routes):
     app.include_router(r.router)
 
 ORIGINS = [o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()]
@@ -43,7 +44,9 @@ INDEXES = {
     "cms": [IndexModel([("key", ASCENDING)], unique=True)],
     "cms_revisions": [IndexModel([("key", ASCENDING), ("created_at", DESCENDING)])],
     "media": [IndexModel([("id", ASCENDING)], unique=True)],
-    "items": [IndexModel([("id", ASCENDING)], unique=True), IndexModel([("sku", ASCENDING)], unique=True)],
+    "items": [IndexModel([("id", ASCENDING)], unique=True), IndexModel([("sku", ASCENDING)], unique=True),
+              IndexModel([("product_id", ASCENDING), ("variant_key", ASCENDING)], unique=True,
+                         partialFilterExpression={"variant_key": {"$type": "string"}})],
     "packages": [IndexModel([("id", ASCENDING)], unique=True)],
     "customers": [IndexModel([("id", ASCENDING)], unique=True), IndexModel([("phone", ASCENDING)])],
     "vehicles": [IndexModel([("id", ASCENDING)], unique=True), IndexModel([("plate", ASCENDING)], unique=True)],
@@ -60,7 +63,10 @@ INDEXES = {
     "expenses": [IndexModel([("date", ASCENDING)])],
     "audit_logs": [IndexModel([("created_at", DESCENDING)])],
     "counters": [IndexModel([("key", ASCENDING)], unique=True)],
-    "products": [IndexModel([("id", ASCENDING)], unique=True), IndexModel([("code", ASCENDING)], unique=True)],
+    "products": [IndexModel([("id", ASCENDING)], unique=True), IndexModel([("code", ASCENDING)], unique=True),
+                 IndexModel([("name_key", ASCENDING)], unique=True, partialFilterExpression={"name_key": {"$type": "string"}})],
+    "locks": [IndexModel([("key", ASCENDING)], unique=True)],
+    "deleted_records": [IndexModel([("ref_id", ASCENDING)]), IndexModel([("deleted_at", DESCENDING)])],
     "settings": [IndexModel([("key", ASCENDING)], unique=True)],
     "wa_logs": [IndexModel([("send_key", ASCENDING)], unique=True), IndexModel([("ref_id", ASCENDING)]),
                 IndexModel([("created_at", DESCENDING)])],
@@ -70,6 +76,7 @@ INDEXES = {
 
 @app.on_event("startup")
 async def startup():
+    await catalog_routes.backfill_keys()
     for coll, models in INDEXES.items():
         try:
             await db[coll].create_indexes(models)

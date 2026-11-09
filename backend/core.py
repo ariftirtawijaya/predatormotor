@@ -79,6 +79,25 @@ def norm_phone(p):
     return d
 
 
+def norm_text(s):
+    return " ".join(str(s or "").split())
+
+
+def text_key(s):
+    return norm_text(s).casefold()
+
+
+def norm_sku(s):
+    return re.sub(r"\s+", "", str(s or "")).upper()
+
+
+async def is_replica_set():
+    try:
+        return bool((await client.admin.command("hello")).get("setName"))
+    except Exception:
+        return False
+
+
 def norm_plate(p):
     return re.sub(r"[^A-Z0-9]", "", (p or "").upper())
 
@@ -145,13 +164,13 @@ def strip_cost(obj, user):
     return obj
 
 
-async def audit(user, action, ref_type, ref_id=None, before=None, after=None, reason=None):
+async def audit(user, action, ref_type, ref_id=None, before=None, after=None, reason=None, session=None):
     await db.audit_logs.insert_one({
         "id": new_id(), "user_id": user["id"] if user else None,
         "user_name": user["name"] if user else "sistem", "role": user["role"] if user else None,
         "action": action, "ref_type": ref_type, "ref_id": ref_id,
         "before": before, "after": after, "reason": reason, "created_at": iso(),
-    })
+    }, session=session)
 
 
 async def next_number(prefix):
@@ -161,15 +180,15 @@ async def next_number(prefix):
     return f"{prefix}-{d}-{c['seq']:03d}"
 
 
-async def move_stock(item_id, delta, kind, reason, user, ref_type=None, ref_id=None, ref_no=None):
+async def move_stock(item_id, delta, kind, reason, user, ref_type=None, ref_id=None, ref_no=None, session=None):
     if delta == 0:
         return None
     q = {"id": item_id}
     if delta < 0:
         q["stock"] = {"$gte": -delta}
-    after = await db.items.find_one_and_update(q, {"$inc": {"stock": delta}}, return_document=ReturnDocument.AFTER)
+    after = await db.items.find_one_and_update(q, {"$inc": {"stock": delta}}, return_document=ReturnDocument.AFTER, session=session)
     if not after:
-        it = await db.items.find_one({"id": item_id})
+        it = await db.items.find_one({"id": item_id}, session=session)
         if not it:
             raise HTTPException(404, "Barang tidak ditemukan")
         raise HTTPException(409, f"Stok {it['name']} tidak cukup (tersisa {it.get('stock', 0)} pcs, butuh {-delta})")
@@ -179,7 +198,7 @@ async def move_stock(item_id, delta, kind, reason, user, ref_type=None, ref_id=N
         "reason": reason, "ref_type": ref_type, "ref_id": ref_id, "ref_no": ref_no,
         "user_id": user["id"] if user else None, "user_name": user["name"] if user else "sistem",
         "created_at": iso(), "date_local": local_date(),
-    })
+    }, session=session)
     return after
 
 

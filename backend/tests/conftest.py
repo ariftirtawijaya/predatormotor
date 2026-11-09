@@ -69,10 +69,10 @@ def _wait(proc, log, base=None):
     pytest.exit(f"Server tes gagal berjalan:\n{Path(log).read_text()[-3000:]}", returncode=3)
 
 
-def spawn_server(db_name, port, seed=True):
+def spawn_server(db_name, port, seed=True, extra_env=None):
     """Server tes tambahan dengan database sendiri (dipakai tes reset agar tidak mengosongkan DB tes utama)."""
     assert db_name.startswith("predator_pytest_") and db_name != APP_DB
-    env = {**os.environ, "DB_NAME": db_name, "CORS_ORIGINS": f"http://127.0.0.1:{port}"}
+    env = {**os.environ, "DB_NAME": db_name, "CORS_ORIGINS": f"http://127.0.0.1:{port}", **(extra_env or {})}
     log = os.path.join(UPLOAD_DIR, f"server-{port}.log")
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", str(port)],
                             cwd=BACKEND, env=env, stdout=open(log, "w"), stderr=subprocess.STDOUT)
@@ -104,6 +104,24 @@ def test_server():
         c.drop_database(TEST_DB)
         c.close()
         shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
+
+
+def is_replset():
+    from pymongo import MongoClient
+    c = MongoClient(MONGO_URL, serverSelectionTimeoutMS=3000)
+    try:
+        return bool(c.admin.command("hello").get("setName"))
+    finally:
+        c.close()
+
+
+REPLSET = is_replset()
+
+
+@pytest.fixture
+def replset():
+    if not REPLSET:
+        pytest.skip("Butuh MongoDB replica set (TEST_MONGO_URL=mongodb://...?replicaSet=rs0) — lihat scripts/test-replset.sh")
 
 
 def login(role):

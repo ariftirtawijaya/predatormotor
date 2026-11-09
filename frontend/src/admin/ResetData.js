@@ -39,7 +39,7 @@ export default function ResetData() {
   };
   return (
     <div className="max-w-4xl space-y-5" data-testid="reset-page">
-      <PageHead title="Pengaturan · Reset Data Uji" sub="Mengosongkan aplikasi untuk mulai memakai data asli. Hanya owner." />
+      <PageHead title="Reset Data Uji" sub="Mengosongkan aplikasi untuk mulai memakai data asli. Hanya owner." />
       <div className="flex gap-3 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-900">
         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
         <div>

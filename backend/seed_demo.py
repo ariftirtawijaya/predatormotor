@@ -44,8 +44,8 @@ async def main():
                                       "description": "Paket uji", "price": 1500000, "warranty_days": 365, "active": True, "demo": True,
                                       "components": [{"item_id": ids["TEST-BILED-01"], "qty": 2}, {"item_id": ids["TEST-SHROUD-01"], "qty": 2},
                                                      {"item_id": ids["TEST-RELAY-01"], "qty": 1}],
-                                      "options": [{"id": new_id(), "name": "Upgrade Shroud RGB", "price": 350000,
-                                                   "items": [{"item_id": ids["TEST-SHROUD-RGB"], "qty": 2}]}], "created_at": iso()})
+                                      "options": [{"id": new_id(), "name": "Upgrade Shroud RGB", "price": 350000, "mode": "replace",
+                                                   "replaces": ids["TEST-SHROUD-01"], "items": [{"item_id": ids["TEST-SHROUD-RGB"], "qty": 2}]}], "created_at": iso()})
     from catalog_routes import migrate_products
     await migrate_products()
     print("Data uji siap.")

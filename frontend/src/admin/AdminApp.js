@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Routes, Route, NavLink, Navigate, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ShoppingCart, Wrench, MessageCircle, Car, Receipt, Package, Boxes, ArrowLeftRight, AlertTriangle,
-  Wallet, Globe, Image, BadgePercent, BarChart3, Users, ScrollText, Menu, X, LogOut, Settings } from "lucide-react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Menu, X, LogOut } from "lucide-react";
 import { useAuth, isManager, isOwner } from "@/context/AuthContext";
 import Login from "@/admin/Login";
 import Dashboard from "@/admin/Dashboard";
@@ -11,7 +10,8 @@ import JobDetail from "@/admin/JobDetail";
 import { OrderList, OrderNew } from "@/admin/Orders";
 import OrderDetail from "@/admin/OrderDetail";
 import { VehicleSearch, VehicleHistory, CustomerHistory } from "@/admin/Vehicles";
-import ResetData from "@/admin/ResetData";
+import { Sidebar } from "@/admin/Sidebar";
+import SettingsPage from "@/admin/SettingsPage";
 import Items from "@/admin/Items";
 import Packages from "@/admin/Packages";
 import { Mutations, Damaged } from "@/admin/Stock";
@@ -21,45 +21,8 @@ import { Discounts, UsersPage, AuditPage } from "@/admin/OwnerPages";
 import CMS from "@/admin/CMS";
 import MediaLibrary from "@/admin/MediaLibrary";
 import PrintPage from "@/admin/PrintPage";
-import WhatsAppSettings from "@/admin/WhatsAppSettings";
-
-const NAV = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/kasir", label: "Kasir Penjualan", icon: ShoppingCart },
-  { to: "/admin/pekerjaan", label: "Pekerjaan Bengkel", icon: Wrench },
-  { to: "/admin/pesanan", label: "Pesanan WhatsApp", icon: MessageCircle },
-  { to: "/admin/kendaraan", label: "Riwayat Kendaraan", icon: Car },
-  { to: "/admin/penjualan", label: "Nota Penjualan", icon: Receipt },
-  { to: "/admin/barang", label: "Master Barang", icon: Boxes, mgr: true },
-  { to: "/admin/paket", label: "Paket", icon: Package, mgr: true },
-  { to: "/admin/stok", label: "Mutasi Stok", icon: ArrowLeftRight, mgr: true },
-  { to: "/admin/rusak", label: "Barang Rusak", icon: AlertTriangle, mgr: true },
-  { to: "/admin/biaya", label: "Biaya Operasional", icon: Wallet, mgr: true },
-  { to: "/admin/cms", label: "CMS Website", icon: Globe, mgr: true },
-  { to: "/admin/media", label: "Media", icon: Image, mgr: true },
-  { to: "/admin/diskon", label: "Persetujuan Diskon", icon: BadgePercent, owner: true },
-  { to: "/admin/laporan", label: "Laporan", icon: BarChart3, owner: true },
-  { to: "/admin/pengguna", label: "Pengguna", icon: Users, owner: true },
-  { to: "/admin/audit", label: "Audit Log", icon: ScrollText, owner: true },
-  { to: "/admin/pengaturan/whatsapp", label: "Pengaturan · WhatsApp", icon: Settings, owner: true },
-  { to: "/admin/reset-data", label: "Pengaturan · Reset Data", icon: Settings, owner: true },
-];
 
 const ROLE = { owner: "Owner", admin: "Admin", kasir: "Kasir" };
-
-function Sidebar({ user, onNav }) {
-  const items = NAV.filter((n) => (n.owner ? isOwner(user) : n.mgr ? isManager(user) : true));
-  return (
-    <nav className="flex flex-col gap-0.5 p-3">
-      {items.map((n) => (
-        <NavLink key={n.to} to={n.to} end={n.end} onClick={onNav} data-testid={`nav-${n.to.split("/")[2] || "dashboard"}`}
-          className={({ isActive }) => `flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActive ? "bg-sky-50 text-sky-800 ring-1 ring-sky-200" : "text-slate-700 hover:bg-slate-100"}`}>
-          <n.icon className="h-4 w-4" />{n.label}
-        </NavLink>
-      ))}
-    </nav>
-  );
-}
 
 function Shell({ user, children }) {
   const [open, setOpen] = useState(false);
@@ -126,8 +89,8 @@ export default function AdminApp() {
             <Route path="laporan" element={<Guard ok={isOwner(user)}><Reports /></Guard>} />
             <Route path="pengguna" element={<Guard ok={isOwner(user)}><UsersPage /></Guard>} />
             <Route path="audit" element={<Guard ok={isOwner(user)}><AuditPage /></Guard>} />
-            <Route path="pengaturan/whatsapp" element={<Guard ok={isOwner(user)}><WhatsAppSettings /></Guard>} />
-            <Route path="reset-data" element={<Guard ok={isOwner(user)}><ResetData /></Guard>} />
+            <Route path="pengaturan/*" element={<Guard ok={isOwner(user)}><SettingsPage /></Guard>} />
+            <Route path="reset-data" element={<Navigate to="/admin/pengaturan/reset-data" replace />} />
             <Route path="*" element={<p>Halaman tidak ditemukan.</p>} />
           </Routes>
         </Shell>

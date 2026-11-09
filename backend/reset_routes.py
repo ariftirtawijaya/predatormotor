@@ -8,11 +8,13 @@ router = APIRouter(prefix="/api")
 CONFIRM_TEXT = "RESET SEMUA DATA"
 # Semua data bisnis + data turunan. Struktur (indeks) dipertahankan; CMS diisi ulang dengan struktur kosong.
 WIPE = ["customers", "vehicles", "products", "items", "packages", "stock_mutations", "jobs", "sales", "orders", "payments",
-        "damaged", "expenses", "wa_logs", "wa_locks", "cms_revisions", "media", "counters", "audit_logs", "login_attempts", "migrations"]
+        "damaged", "expenses", "wa_logs", "wa_locks", "cms_revisions", "media", "counters", "audit_logs", "login_attempts", "migrations",
+        "deleted_records", "locks"]
 LABELS = {"customers": "Pelanggan", "vehicles": "Kendaraan", "products": "Produk induk", "items": "Varian barang", "packages": "Paket",
           "stock_mutations": "Mutasi stok", "jobs": "Pekerjaan bengkel", "sales": "Penjualan langsung", "orders": "Pesanan WhatsApp",
           "payments": "Pembayaran & refund", "damaged": "Barang rusak", "expenses": "Biaya", "wa_logs": "Riwayat kirim WA",
-          "cms_revisions": "Revisi CMS", "media": "Media unggahan", "audit_logs": "Audit log", "users": "Akun lain (admin/kasir/owner lain)"}
+          "cms_revisions": "Revisi CMS", "media": "Media unggahan", "audit_logs": "Audit log", "deleted_records": "Arsip data terhapus",
+          "users": "Akun lain (admin/kasir/owner lain)"}
 
 
 def upload_files():
@@ -44,7 +46,7 @@ class ResetIn(BaseModel):
 
 async def verify_clean(owner_id):
     c = await counts(owner_id)
-    issues = [f"{LABELS.get(k, k)} masih {v}" for k, v in c.items() if v and k not in ("audit_logs",)]
+    issues = [f"{LABELS.get(k, k)} masih {v}" for k, v in c.items() if v and k not in ("audit_logs", "locks")]
     if await db.users.count_documents({}) != 1:
         issues.append("Jumlah akun bukan 1")
     cms = await db.cms.find({}, {"_id": 0}).to_list(50)

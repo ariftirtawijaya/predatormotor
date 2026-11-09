@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 import { rp, fmtDateTime, KIND_LABEL, KIND_PATH } from "@/lib/fmt";
 import { Btn, Field, Input, Select, Card, Table, Td, PageHead, Badge } from "@/admin/ui";
 import { useLoad, act } from "@/admin/tx";
+import { DeleteDialog } from "@/admin/DeleteDialog";
+import { Trash2 } from "lucide-react";
 
 export function Discounts() {
   const [rows, load] = useLoad("/discounts/pending");
@@ -25,6 +27,7 @@ export function Discounts() {
 
 export function UsersPage() {
   const [rows, load] = useLoad("/users");
+  const [del, setDel] = useState(null);
   const [f, setF] = useState({ email: "", name: "", role: "kasir", password: "" });
   const create = async () => { const r = await act(() => api.post("/users", f), "Pengguna dibuat"); if (r) { setF({ email: "", name: "", role: "kasir", password: "" }); load(); } };
   const patch = async (u, body, msg) => { await act(() => api.patch(`/users/${u.id}`, body), msg); load(); };
@@ -45,10 +48,13 @@ export function UsersPage() {
           <tr key={u.id}><Td>{u.name}</Td><Td>{u.email}</Td><Td><Badge>{u.role}</Badge></Td><Td>{u.active ? "Aktif" : "Nonaktif"}</Td>
             <Td className="whitespace-nowrap">
               <Btn size="sm" v="outline" onClick={() => patch(u, { active: !u.active }, "Status diubah")} data-testid={`user-toggle-${u.email}`}>{u.active ? "Nonaktifkan" : "Aktifkan"}</Btn>{" "}
-              <Btn size="sm" v="outline" onClick={() => { const p = window.prompt("Password baru (min 8 karakter)"); if (p) patch(u, { password: p }, "Password direset"); }} data-testid={`user-reset-${u.email}`}>Reset password</Btn>
+              <Btn size="sm" v="outline" onClick={() => { const p = window.prompt("Password baru (min 8 karakter)"); if (p) patch(u, { password: p }, "Password direset"); }} data-testid={`user-reset-${u.email}`}>Reset password</Btn>{" "}
+              <Btn size="sm" v="ghost" className="text-red-700" onClick={() => setDel(u)} data-testid={`user-delete-${u.email}`}><Trash2 className="h-3.5 w-3.5" />Hapus</Btn>
             </Td></tr>
         ))}
       </Table>
+      {del && <DeleteDialog kind="user" id={del.id} url={`/users/${del.id}`} onClose={() => setDel(null)} onDone={load}
+        onDeactivate={del.active ? () => api.patch(`/users/${del.id}`, { active: false }) : null} />}
     </div>
   );
 }

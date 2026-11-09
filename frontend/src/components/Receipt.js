@@ -1,6 +1,11 @@
 import { rp, fmtDateTime, fmtDate, KIND_LABEL } from "@/lib/fmt";
 
 const Row = ({ l, r, b }) => <div className={`flex justify-between gap-2 ${b ? "font-bold" : ""}`}><span>{l}</span><span className="text-right">{r}</span></div>;
+const installed = (l) => {
+  const list = l.installed?.length ? l.installed : l.type === "package" ? (l.components || []).map((c) => `${c.name} x${c.qty}`) : [];
+  return list.join(", ");
+};
+
 
 export default function Receipt({ d, identity = {}, contact = {}, size = "80" }) {
   const a4 = size === "a4";
@@ -32,7 +37,8 @@ export default function Receipt({ d, identity = {}, contact = {}, size = "80" })
           <tbody>
             {lines.map((l, i) => (
               <tr key={i} className="border-b border-gray-300 align-top">
-                <td className="py-1.5"><b>{l.name}</b>{l.detail && <div>{l.detail}</div>}{(l.options || []).map((o, k) => <div key={k}>+ {o.name} ({rp(o.price)})</div>)}
+                <td className="py-1.5"><b>{l.name}</b>{l.detail && <div>{l.detail}</div>}{(l.options || []).map((o, k) => <div key={k}>{o.mode === "replace" ? "⇄" : "+"} {o.name} ({rp(o.price)})</div>)}
+                  {installed(l) && <div className="text-[11px]">Isi: {installed(l)}</div>}
                   {l.warranty_until && <div>Garansi s/d {fmtDate(l.warranty_until)}</div>}</td>
                 <td className="text-right">{l.qty}</td><td className="text-right">{rp(l.unit_price)}</td><td className="text-right">{rp(l.subtotal)}</td>
               </tr>
@@ -45,7 +51,8 @@ export default function Receipt({ d, identity = {}, contact = {}, size = "80" })
             <div key={i}>
               <p className="font-bold">{l.name}</p>
               {l.detail && <p>{l.detail}</p>}
-              {(l.options || []).map((o, k) => <p key={k}>+ {o.name}</p>)}
+              {(l.options || []).map((o, k) => <p key={k}>{o.mode === "replace" ? "⇄" : "+"} {o.name}</p>)}
+              {installed(l) && <p>Isi: {installed(l)}</p>}
               <Row l={`${l.qty} x ${rp(l.unit_price)}`} r={rp(l.subtotal)} />
               {l.warranty_until && <p>Garansi s/d {fmtDate(l.warranty_until)}</p>}
             </div>

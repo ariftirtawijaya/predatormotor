@@ -2,12 +2,15 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    # Replica set satu node: wajib untuk transaksi MongoDB (impor Excel disimpan seluruhnya atau tidak sama sekali).
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
-      interval: 15s
-      retries: 5
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status() } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}) }; quit(db.hello().isWritablePrimary ? 0 : 1)"]
+      interval: 10s
+      start_period: 30s
+      retries: 12
 
   backend:
     build: ./backend

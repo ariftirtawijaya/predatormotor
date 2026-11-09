@@ -49,6 +49,36 @@ export function ItemSearch({ onPick, testid = "item-search" }) {
   );
 }
 
+export function packageResult(pkg, opts) {
+  const chosen = pkg.options.filter((o) => opts.includes(o.id));
+  const replaced = new Set(chosen.filter((o) => o.mode === "replace").map((o) => o.replaces));
+  const comps = pkg.components.filter((c) => !replaced.has(c.item_id)).concat(chosen.flatMap((o) => o.items));
+  return { comps, price: pkg.price + chosen.reduce((s, o) => s + o.price, 0) };
+}
+
+function PackagePreview({ pkg, opts, setOpts }) {
+  const chosen = pkg.options.filter((o) => opts.includes(o.id));
+  const clash = (o) => o.mode === "replace" && chosen.some((c) => c.id !== o.id && c.mode === "replace" && c.replaces === o.replaces);
+  const { comps, price } = packageResult(pkg, opts);
+  const opt = (o) => (
+    <label key={o.id} className={`flex items-center gap-2 ${clash(o) ? "opacity-40" : ""}`}>
+      <input type="checkbox" disabled={clash(o)} checked={opts.includes(o.id)} onChange={(e) => setOpts(e.target.checked ? [...opts, o.id] : opts.filter((x) => x !== o.id))} data-testid={`linepicker-option-${o.id}`} />
+      {o.mode === "replace" ? <span>{o.name}: ganti {o.replaces_name} → {o.items.map((c) => c.name).join(", ")} ({o.price >= 0 ? "+" : ""}{rp(o.price)})</span> : <span>{o.name} (+{rp(o.price)})</span>}
+    </label>
+  );
+  const add = pkg.options.filter((o) => o.mode !== "replace");
+  const rep = pkg.options.filter((o) => o.mode === "replace");
+  return (
+    <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm" data-testid="linepicker-package-preview">
+      <p className="text-xs text-slate-600">Komponen dasar: {pkg.components.map((c) => `${c.name} x${c.qty} (stok ${c.stock})`).join(", ")}</p>
+      {!!rep.length && <div><p className="text-xs font-semibold uppercase text-slate-500">Ganti komponen / upgrade</p>{rep.map(opt)}</div>}
+      {!!add.length && <div><p className="text-xs font-semibold uppercase text-slate-500">Tambah barang</p>{add.map(opt)}</div>}
+      {!!chosen.length && <p className="rounded bg-white p-2 text-xs" data-testid="linepicker-package-result">Dipasang: {comps.map((c) => `${c.name} x${c.qty}`).join(", ")}</p>}
+      <p className="font-semibold">Harga: <span className="font-mono-num" data-testid="linepicker-package-price">{rp(price)}</span></p>
+    </div>
+  );
+}
+
 export function LinePicker({ onAdd, garansi, busy }) {
   const { user } = useAuth();
   const [tab, setTab] = useState("package");
@@ -69,18 +99,7 @@ export function LinePicker({ onAdd, garansi, busy }) {
             <option value="">Pilih paket…</option>
             {(pkgs || []).filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name} — {rp(p.price)}</option>)}
           </Select>
-          {pkg && (
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-              <p className="font-semibold">{pkg.main_brand_model}</p>
-              <p className="text-xs text-slate-600">Komponen: {pkg.components.map((c) => `${c.name} x${c.qty} (stok ${c.stock})`).join(", ")}</p>
-              {pkg.options.map((o) => (
-                <label key={o.id} className="mt-2 flex items-center gap-2">
-                  <input type="checkbox" checked={opts.includes(o.id)} onChange={(e) => setOpts(e.target.checked ? [...opts, o.id] : opts.filter((x) => x !== o.id))} data-testid={`linepicker-option-${o.id}`} />
-                  {o.name} (+{rp(o.price)})
-                </label>
-              ))}
-            </div>
-          )}
+          {pkg && <PackagePreview pkg={pkg} opts={opts} setOpts={setOpts} />}
           <Btn type="button" disabled={!pid || busy} onClick={() => onAdd({ type: "package", package_id: pid, option_ids: opts, qty: 1 })} data-testid="linepicker-add-package">Tambah paket</Btn>
         </div>
       )}
@@ -113,8 +132,8 @@ export function LinesTable({ doc, onEdit, onRemove }) {
       {doc.lines.map((l) => (
         <tr key={l.lid} className={l.removed ? "bg-red-50 text-slate-400 line-through" : ""} data-testid={`line-${l.lid}`}>
           <Td><b>{l.name}</b>{l.detail && <div className="text-xs text-slate-600">{l.detail}</div>}
-            {l.options?.map((o, i) => <div key={i} className="text-xs text-slate-600">+ {o.name} ({rp(o.price)})</div>)}
-            {l.type === "package" && <div className="text-xs text-slate-500">Komponen: {l.components.map((c) => `${c.name} x${c.qty}`).join(", ")}</div>}
+            {l.options?.map((o, i) => <div key={i} className="text-xs text-slate-600">{o.mode === "replace" ? `⇄ ${o.name}${o.replaces_name ? ` (ganti ${o.replaces_name})` : ""}` : `+ ${o.name}`} ({rp(o.price)})</div>)}
+            {l.type === "package" && <div className="text-xs text-slate-500">Dipasang: {l.components.map((c) => `${c.name} x${c.qty}`).join(", ")}</div>}
             {l.warranty_replacement && <Badge tone="Baru">Pengganti garansi</Badge>}
             {l.warranty_until && <div className="text-xs text-emerald-700">Garansi s/d {fmtDate(l.warranty_until)}</div>}
             {l.removed && <div className="text-xs no-underline">Dihapus {l.removed_by}: {l.removed_reason}</div>}

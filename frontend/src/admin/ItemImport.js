@@ -26,10 +26,10 @@ export function ImportDialog({ onClose, onDone }) {
     fd.append("file", file);
     setBusy(true); setErr("");
     try {
-      const r = await api.post(`/items/import?commit=${commit}`, fd);
+      const r = await api.post(`/items/import?commit=${commit}${commit ? `&plan_hash=${res?.plan_hash || ""}` : ""}`, fd);
       setRes(r.data);
       return r.data;
-    } catch (e) { setErr(errMsg(e)); return null; } finally { setBusy(false); }
+    } catch (e) { setErr(errMsg(e)); if (commit) setRes(null); return null; } finally { setBusy(false); }
   };
   const commit = async () => {
     const d = await send(true);
@@ -38,7 +38,7 @@ export function ImportDialog({ onClose, onDone }) {
   return (
     <Modal open onClose={onClose} title="Impor Master Barang dari Excel" wide>
       <div className="space-y-4" data-testid="import-dialog">
-        <p className="text-sm text-slate-600">Satu baris = satu varian. Baris dengan <b>kode_produk</b> sama menjadi varian dari produk yang sama. Stok varian yang sudah ada tidak pernah ditimpa — gunakan Barang masuk / Opname.</p>
+        <p className="text-sm text-slate-600">Satu baris = satu varian. Baris dengan <b>kode_produk</b> sama menjadi varian dari produk yang sama; <b>nama_varian</b> kosong = produk sederhana. Stok varian yang sudah ada tidak pernah ditimpa. Impor disimpan <b>seluruhnya atau tidak sama sekali</b>, dan diperiksa ulang saat Anda menekan Simpan.</p>
         <input type="file" accept=".xlsx" onChange={(e) => { setFile(e.target.files[0]); setRes(null); }} data-testid="import-file-input" />
         <Btn v="outline" disabled={!file || busy} onClick={() => send(false)} data-testid="import-preview-button">Pratinjau</Btn>
         {err && <p className="rounded-md bg-red-50 p-2 text-sm text-red-800" data-testid="import-error">{err}</p>}
@@ -53,14 +53,17 @@ export function ImportDialog({ onClose, onDone }) {
           <div className="max-h-72 overflow-y-auto">
             <Table head={["Baris", "Produk", "Varian", "SKU", "Harga", "Stok awal", "Tindakan"]} testid="import-preview-table">
               {res.rows.map((r) => (
-                <tr key={r.row}><Td>{r.row}</Td><Td>{r.product_name}<div className="text-xs text-slate-500">{r.product_code}</div></Td><Td>{r.variant || "Standar"}</Td>
+                <tr key={r.row}><Td>{r.row}</Td><Td>{r.product_name}<div className="text-xs text-slate-500">{r.product_code}</div></Td><Td>{r.variant || <span className="text-slate-500">Produk sederhana</span>}</Td>
                   <Td className="font-mono-num">{r.sku}</Td><Td className="font-mono-num">{rp(r.price)}</Td>
                   <Td>{r.action === "baru" ? r.initial_stock : <span className="text-xs text-slate-500">{r.stock_note || "-"}</span>}</Td><Td>{ACTION[r.action]}</Td></tr>
               ))}
             </Table>
           </div>
+          {!res.committed && !res.transactions_ready && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900" data-testid="import-no-transactions">Server database belum mode replica set, jadi impor belum bisa disimpan di sini (pratinjau tetap berfungsi). Di VPS, ikuti README bagian Impor Excel.</p>
+          )}
           {res.committed ? <p className="font-semibold text-emerald-700" data-testid="import-done">Impor selesai disimpan.</p> : (
-            <Btn disabled={busy || !!res.errors.length || !res.rows.length} onClick={commit} data-testid="import-commit-button">Konfirmasi & simpan impor</Btn>
+            <Btn disabled={busy || !!res.errors.length || !res.rows.length || !res.transactions_ready} onClick={commit} data-testid="import-commit-button">Konfirmasi & simpan impor</Btn>
           )}
         </>)}
       </div>

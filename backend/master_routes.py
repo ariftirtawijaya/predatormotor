@@ -45,14 +45,16 @@ class CompIn(BaseModel):
 
 class OptIn(BaseModel):
     id: str | None = None
-    name: str
-    price: int = Field(ge=0)
+    name: str = Field(min_length=1, max_length=120)
+    mode: str = "add"
+    replaces: str | None = None
+    price: int = Field(ge=-100_000_000, le=1_000_000_000)
     items: list[CompIn] = []
 
 
 class PackageIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    main_brand_model: str = ""
+    main_brand_model: str | None = None
     description: str = ""
     price: int = Field(ge=0)
     components: list[CompIn] = []
@@ -68,7 +70,11 @@ async def list_packages(user=Depends(require(*STAFF))):
     for p in pk:
         for c in p["components"] + [x for o in p["options"] for x in o["items"]]:
             it = items.get(c["item_id"], {})
-            c.update({"name": it.get("name", "?"), "sku": it.get("sku"), "stock": it.get("stock", 0), "cost": it.get("cost", 0)})
+            c.update({"name": it.get("name", "?"), "sku": it.get("sku"), "stock": it.get("stock", 0), "cost": it.get("cost", 0),
+                      "active": it.get("active", False)})
+        for o in p["options"]:
+            o.setdefault("mode", "add")
+            o["replaces_name"] = items.get(o.get("replaces") or "", {}).get("name")
         p["cost_total"] = sum(c["cost"] * c["qty"] for c in p["components"])
     return strip_cost(pk, user)
 
@@ -78,12 +84,29 @@ async def _check_items(body):
     found = await db.items.count_documents({"id": {"$in": list(ids)}})
     if found != len(ids):
         raise HTTPException(400, "Ada komponen yang tidak ditemukan di master barang")
+    if len({c.item_id for c in body.components}) != len(body.components):
+        raise HTTPException(400, "Komponen dasar tidak boleh ganda; ubah jumlahnya saja")
+    base = {c.item_id for c in body.components}
+    for o in body.options:
+        if o.mode not in ("add", "replace"):
+            raise HTTPException(400, f"Jenis opsi {o.name} tidak valid")
+        if o.mode == "replace":
+            if o.replaces not in base:
+                raise HTTPException(400, f"Opsi '{o.name}': pilih komponen dasar yang diganti")
+            if not o.items:
+                raise HTTPException(400, f"Opsi '{o.name}': pilih barang pengganti")
+        elif o.price < 0:
+            raise HTTPException(400, f"Opsi tambah barang '{o.name}' tidak boleh berharga negatif")
+    if body.price + sum(min(o.price, 0) for o in body.options) < 0:
+        raise HTTPException(400, "Harga paket setelah opsi tidak boleh negatif")
 
 
 def _pkg_doc(body):
-    d = body.model_dump()
+    d = body.model_dump(exclude={"main_brand_model"} if body.main_brand_model is None else set())
     for o in d["options"]:
         o["id"] = o.get("id") or new_id()
+        if o["mode"] == "add":
+            o["replaces"] = None
     return d
 
 

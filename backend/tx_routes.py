@@ -22,22 +22,48 @@ class LineIn(BaseModel):
     warranty_replacement: bool = False
 
 
+def package_components(p, option_ids):
+    """Komponen yang benar-benar dipasang: dasar − komponen yang diganti + pengganti + barang tambahan."""
+    opts = [dict(o) for o in p["options"] if o["id"] in option_ids]
+    if len(opts) != len(set(option_ids)):
+        raise HTTPException(400, "Ada opsi paket yang tidak ditemukan (mungkin paket sudah diubah). Pilih ulang opsinya.")
+    seen = {}
+    for o in opts:
+        if o.get("mode") == "replace":
+            if o.get("replaces") in seen:
+                raise HTTPException(400, f"Opsi '{seen[o['replaces']]}' dan '{o['name']}' saling bertentangan (mengganti komponen yang sama). Pilih salah satu.")
+            seen[o["replaces"]] = o["name"]
+    comps = [dict(c) for c in p["components"] if c["item_id"] not in seen]
+    for o in opts:
+        comps += [dict(c) for c in o["items"]]
+    return comps, opts
+
+
 async def build_line(inp: LineIn, user):
     is_mgr = user["role"] in MANAGERS
     base = {"lid": new_id(), "type": inp.type, "qty": inp.qty, "options": [], "detail": "", "removed": False,
             "added_by": user["name"], "added_at": iso(), "warranty_days": 0, "warranty_replacement": False}
     if inp.type == "package":
         p = await get_or_404("packages", inp.package_id or "", "Paket tidak ditemukan")
-        opts = [o for o in p["options"] if o["id"] in inp.option_ids]
-        comps = p["components"] + [c for o in opts for c in o["items"]]
-        items = {i["id"]: i for i in await find_list("items", {"id": {"$in": [c["item_id"] for c in comps]}})}
-        base.update(name=p["name"], package_id=p["id"], detail=p.get("main_brand_model", ""),
-                    options=[{"name": o["name"], "price": o["price"]} for o in opts],
+        if not p.get("active", True):
+            raise HTTPException(400, f"Paket {p['name']} nonaktif dan tidak dapat dipilih untuk transaksi baru")
+        comps, opts = package_components(p, inp.option_ids)
+        items = {i["id"]: i for i in await find_list("items", {"id": {"$in": [c["item_id"] for c in comps + p["components"]]}})}
+        for o in opts:
+            o["replaces_name"] = items.get(o.get("replaces") or "", {}).get("name")
+            o["items_names"] = [f"{items[c['item_id']]['name']} x{c['qty']}" for c in o["items"] if c["item_id"] in items]
+        base.update(name=p["name"], package_id=p["id"], detail=p.get("main_brand_model") or "",
+                    options=[{"name": o["name"], "price": o["price"], "mode": o.get("mode", "add"), "replaces_name": o.get("replaces_name"),
+                              "items": o["items_names"]} for o in opts],
                     unit_price=p["price"] + sum(o["price"] for o in opts), warranty_days=p.get("warranty_days", 0),
                     components=[{"item_id": c["item_id"], "sku": items[c["item_id"]]["sku"], "name": items[c["item_id"]]["name"],
                                  "qty": c["qty"], "cost": items[c["item_id"]].get("cost", 0)} for c in comps])
+        if base["unit_price"] < 0:
+            raise HTTPException(400, "Harga paket setelah opsi tidak boleh negatif")
     elif inp.type == "item":
         it = await get_or_404("items", inp.item_id or "", "Barang tidak ditemukan")
+        if not it.get("active", True):
+            raise HTTPException(400, f"Barang {it['name']} nonaktif dan tidak dapat dipilih untuk transaksi baru")
         price = inp.unit_price if (is_mgr and inp.unit_price is not None) else it["price"]
         if inp.warranty_replacement:
             price = 0
@@ -151,7 +177,7 @@ async def create_job_doc(kind, customer, vehicle, user, complaint="", notes="", 
          "complaint": complaint[:2000], "notes": notes[:2000], "photos": photos or [], "lines": [], "discount": None,
          "subtotal": 0, "discount_amount": 0, "total": 0, "hpp": 0, "paid": 0, "refunded": 0, "stock_applied": False,
          "recognized": False, "returns": [], "claim": claim, "public_token": token(),
-         "created_by": user["name"], "created_at": iso(), "date_local": local_date()}
+         "created_by": user["name"], "created_by_id": user["id"], "created_at": iso(), "date_local": local_date()}
     await db.jobs.insert_one(d)
     return d
 
@@ -286,7 +312,7 @@ async def complete_job(jid: str, user=Depends(require(*STAFF))):
         if l.get("warranty_days") and not l.get("removed"):
             l["warranty_until"] = (date.fromisoformat(today) + timedelta(days=l["warranty_days"])).isoformat()
     await db.jobs.update_one({"id": jid}, {"$set": {"status": "Selesai", "lock": False, "stock_applied": True, "recognized": True,
-                                                    "recognized_date": today, "completed_at": iso(), "completed_by": user["name"],
+                                                    "recognized_date": today, "completed_at": iso(), "completed_by": user["name"], "completed_by_id": user["id"],
                                                     "lines": locked["lines"]}})
     op = (locked.get("claim") or {}).get("old_part") or {}
     if op.get("name") and op.get("condition") == "rusak":
@@ -701,7 +727,7 @@ async def create_sale(body: SaleIn, user=Depends(require(*STAFF))):
          "discount": ({"amount": body.discount.amount, "reason": body.discount.reason, "status": "approved", "requested_by": user["name"],
                        "decided_by": user["name"], "decided_at": iso()} if body.discount else None),
          "method": body.method, "paid": 0, "refunded": 0, "returns": [], "stock_applied": False, "recognized": False,
-         "public_token": token(), "created_by": user["name"], "created_at": iso(), "date_local": local_date()}
+         "public_token": token(), "created_by": user["name"], "created_by_id": user["id"], "created_at": iso(), "date_local": local_date()}
     d |= totals(d)
     if body.method == "tunai" and body.cash_received is not None:
         if body.cash_received < d["total"]:
@@ -800,7 +826,7 @@ async def create_order(body: OrderIn, user=Depends(require(*STAFF))):
          "lines": lines, "discount": None, "notes": body.notes[:1000], "ship_status": "Baru", "paid": 0, "refunded": 0,
          "goods_paid": 0, "ship_paid": 0,
          "stock_applied": False, "recognized": False, "cod_settled": False, "returns": [], "public_token": token(),
-         "created_by": user["name"], "created_at": iso(), "date_local": local_date()}
+         "created_by": user["name"], "created_by_id": user["id"], "created_at": iso(), "date_local": local_date()}
     d |= totals(d)
     await db.orders.insert_one(d)
     if kurir and body.save_address:
@@ -968,6 +994,7 @@ async def public_nota(tok: str):
             return {"kind": kind, "no": d["no"], "date": d["created_at"], "customer_name": name,
                     "plate": (d.get("vehicle") or {}).get("plate"), "status": d.get("status") or d.get("ship_status"),
                     "lines": [{k: l.get(k) for k in ("name", "detail", "options", "qty", "unit_price", "subtotal", "warranty_until")}
+                              | {"installed": [f"{c['name']} x{c['qty']}" for c in l.get("components", [])] if l.get("type") == "package" else []}
                               for l in d["lines"] if not l.get("removed")],
                     "subtotal": d["subtotal"], "discount_amount": d["discount_amount"], "shipping_cost": d.get("shipping_cost", 0),
                     "total": d["total"], "paid": d["paid"], "refunded": d.get("refunded", 0), "remaining": max(d["total"] - d["paid"], 0),

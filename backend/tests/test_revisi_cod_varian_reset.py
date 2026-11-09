@@ -35,7 +35,11 @@ def xlsx(rows):
 
 
 def imp(s, content, commit=False):
-    return s.post(f"{B}/items/import?commit={str(commit).lower()}", files={"file": ("m.xlsx", content, "application/octet-stream")})
+    files = {"file": ("m.xlsx", content, "application/octet-stream")}
+    if not commit:
+        return s.post(f"{B}/items/import?commit=false", files=files)
+    h = s.post(f"{B}/items/import?commit=false", files=files).json().get("plan_hash", "")
+    return s.post(f"{B}/items/import?commit=true&plan_hash={h}", files={"file": ("m.xlsx", content, "application/octet-stream")})
 
 
 class TestCodOngkir:
@@ -138,7 +142,7 @@ class TestVarian:
         muts = owner.get(f"{B}/stock/mutations?item_id={two}").json()
         assert muts[0]["item_name"].endswith("2 warna")
 
-    def test_template_dan_impor_ulang(self, owner, admin, kasir):
+    def test_template_dan_impor_ulang(self, owner, admin, kasir, replset):
         t = owner.get(f"{B}/items/import/template")
         wb = load_workbook(io.BytesIO(t.content))
         assert wb.sheetnames == ["Data", "Panduan"] and sum(1 for r in wb["Data"].iter_rows(values_only=True) if r[0] == "DE360") == 6
