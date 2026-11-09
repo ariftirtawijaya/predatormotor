@@ -245,7 +245,7 @@ class TestDelete:
         chk = owner.get(f"{B}/admin/delete-check/item/{vs['Biru']['id']}").json()
         assert not chk["can_delete"] and "Hapus Produk" in chk["reasons"][-1]
 
-    def test_pengguna(self, owner, admin):
+    def test_pengguna(self, owner, admin, replset):
         mk = lambda: owner.post(f"{B}/users", json={"email": f"test.{uid()}@predator.local", "name": f"TEST User {uid()}", "role": "kasir",  # noqa: E731
                                                     "password": "Rahasia-123"}).json()
         u = mk()

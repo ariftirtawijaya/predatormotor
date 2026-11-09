@@ -15,6 +15,6 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 docker exec "$MONGO" mongosh --quiet --eval "quit(db.hello().isWritablePrimary ? 0 : 1)" || { echo "Replica set gagal siap"; exit 1; }
-docker run --rm --network "$NET" -v "$PWD/backend:/src:ro" -e TEST_MONGO_URL="mongodb://$MONGO:27017/?replicaSet=rs0" python:3.11-slim \
-  sh -c "cp -r /src /app && rm -f /app/.env && cd /app && pip install -q -r requirements-dev.txt && python -m pytest tests -q -rs -p no:cacheprovider ${PYTEST_ARGS:-}"
+docker run --rm --network "$NET" -v "$PWD:/src:ro" -e TEST_MONGO_URL="mongodb://$MONGO:27017/?replicaSet=rs0" python:3.11-slim \
+  sh -c "mkdir /repo && tar -C /src --exclude=./frontend/node_modules --exclude=./.git -cf - . | tar -C /repo -xf - && rm -f /repo/backend/.env && cd /repo/backend && pip install -q -r requirements-dev.txt && python -m pytest tests -q -rs -p no:cacheprovider ${PYTEST_ARGS:-}"
 echo "Selesai. Pastikan tidak ada tes impor yang 'SKIPPED' karena replica set."

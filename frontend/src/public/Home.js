@@ -169,7 +169,7 @@ function Cta({ s }) {
       <div className="relative overflow-hidden rounded-3xl border border-slate-200 accent-soft p-10 md:p-14">
         <h2 className="max-w-2xl font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">{s.title}</h2>
         {s.text && <p className="mt-4 max-w-xl text-slate-700">{s.text}</p>}
-        <SLink href="#whatsapp" className="mt-8 inline-flex rounded-full px-7 py-3.5 font-bold accent-bg shadow-lg shadow-slate-900/10" testid="cta-whatsapp">{s.button_label || "Chat WhatsApp"}</SLink>
+        <SLink href="#whatsapp" fallback={{ href: "/kontak", label: "Lihat Kontak & Lokasi" }} className="mt-8 inline-flex rounded-full px-7 py-3.5 font-bold accent-bg shadow-lg shadow-slate-900/10" testid="cta-whatsapp">{s.button_label || "Chat WhatsApp"}</SLink>
       </div>
     </section>
   );

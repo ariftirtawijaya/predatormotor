@@ -1,5 +1,7 @@
 """Iterasi 8 \u2014 perbaikan review: konfigurasi replica set, paket dengan komponen nonaktif, hapus produk/varian atomik."""
 import re
+import shutil
+import subprocess
 from pathlib import Path
 import pytest
 import requests
@@ -11,8 +13,6 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_konfigurasi_replica_set_konsisten():
-    if not (ROOT / "docker-compose.yml").exists():
-        pytest.skip("Berkas repo lengkap tidak tersedia (mis. di dalam container uji)")
     env = (ROOT / "backend/.env.example").read_text()
     compose = (ROOT / "docker-compose.yml").read_text()
     readme = (ROOT / "README.md").read_text()
@@ -21,6 +21,15 @@ def test_konfigurasi_replica_set_konsisten():
     assert url in readme
     assert re.search(r"MONGO_URL:\s*" + re.escape(url), compose), "docker-compose harus memaksa MONGO_URL replica set"
     assert '"--replSet", "rs0"' in compose and "host: 'mongo:27017'" in compose
+
+
+def test_env_example_sudah_di_commit():
+    """Versi yang ter-commit (yang ikut ke GitHub) harus sama dengan berkas kerja."""
+    if not (ROOT / ".git").exists() or not shutil.which("git"):
+        pytest.skip("Repositori git tidak tersedia di lingkungan ini")
+    head = subprocess.run(["git", "-C", str(ROOT), "show", "HEAD:backend/.env.example"], capture_output=True, text=True)
+    assert head.returncode == 0, head.stderr
+    assert 'MONGO_URL="mongodb://mongo:27017/?replicaSet=rs0"' in head.stdout, "backend/.env.example di commit terakhir belum memakai replica set"
 
 
 class TestPaketKomponenNonaktif:

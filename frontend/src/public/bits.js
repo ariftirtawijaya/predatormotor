@@ -13,12 +13,13 @@ export function useWa(text) {
   return waLink(c.whatsapp, text || c.wa_message);
 }
 
-export function SLink({ href, children, className, testid, waText }) {
+export function SLink({ href, children, className, testid, waText, fallback }) {
   const loc = useLocation();
   const wa = useWa(waText);
   const preview = new URLSearchParams(loc.search).get("preview") === "1";
   if (href === "#whatsapp") {
-    if (!wa) return <Link to={`/kontak${preview ? "?preview=1" : ""}`} className={className} data-testid={testid}>{children}</Link>;
+    // Tanpa nomor WA terbit: jangan tampilkan tombol WhatsApp palsu; opsional tindakan lain berlabel jujur.
+    if (!wa) return fallback ? <Link to={`${fallback.href}${preview ? "?preview=1" : ""}`} className={className} data-testid={`${testid}-fallback`}>{fallback.label}</Link> : null;
     return <a href={wa} target="_blank" rel="noreferrer" className={className} data-testid={testid}>{children}</a>;
   }
   if (!href || /^(https?:|mailto:|tel:)/.test(href)) {

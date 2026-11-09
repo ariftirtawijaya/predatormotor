@@ -72,21 +72,32 @@ async def item_blockers(it, session=None):
     return reasons, packages
 
 
-async def user_blockers(u, me):
+async def user_blockers(u, me, session=None):
     reasons = []
     if u["id"] == me["id"]:
         reasons.append("Tidak dapat menghapus akun yang sedang Anda pakai")
-    if u["role"] == "owner" and await db.users.count_documents({"role": "owner"}) <= 1:
+    if u["role"] == "owner" and not await db.users.count_documents({"role": "owner", "active": True, "id": {"$ne": u["id"]}}, session=session):
         reasons.append("Ini akun owner terakhir")
     name, uid = u["name"], u["id"]
     q = {"$or": [{"created_by_id": uid}, {"completed_by_id": uid}, {"created_by": name}, {"completed_by": name}, {"lines.added_by": name}]}
-    n = sum([await db[c].count_documents(q) for c, _ in TX])
+    n = sum([await db[c].count_documents(q, session=session) for c, _ in TX])
     if n:
         reasons.append(f"Pengguna tercatat pada {n} transaksi")
-    m = sum([await db[c].count_documents({"user_id": uid}) for c in ("payments", "stock_mutations", "expenses", "damaged")])
+    m = sum([await db[c].count_documents({"user_id": uid}, session=session) for c in ("payments", "stock_mutations", "expenses", "damaged")])
     if m:
         reasons.append(f"Pengguna tercatat pada {m} catatan pembayaran/stok/biaya")
     return reasons
+
+
+async def _still_owner(user, session):
+    """Hak akses diperiksa ulang di dalam transaksi (akun bisa dinonaktifkan/dihapus sejak request dimulai)."""
+    me = await db.users.find_one({"id": user["id"]}, {"_id": 0, "role": 1, "active": 1}, session=session)
+    if not me or me.get("role") != "owner" or not me.get("active", True):
+        raise HTTPException(403, "Hanya owner aktif yang dapat menghapus data")
+
+
+async def _lock(key, user, session):
+    await db.locks.update_one({"key": key}, {"$set": {"at": iso(), "by": user["id"]}}, upsert=True, session=session)
 
 
 def _check(name, reasons, **extra):
@@ -148,6 +159,7 @@ async def delete_item(iid: str, confirm: str = "", user=Depends(OWNER)):
         raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(reasons))
 
     async def run(s):
+        await _still_owner(user, s)
         cur = await db.items.find_one({"id": iid}, {"_id": 0}, session=s)
         if not cur:
             raise HTTPException(404, "Barang sudah tidak ada")
@@ -178,6 +190,7 @@ async def delete_product(pid: str, confirm: str = "", user=Depends(OWNER)):
         raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(reasons))
 
     async def run(s):
+        await _still_owner(user, s)
         variants = await db.items.find({"product_id": pid}, {"_id": 0}, session=s).to_list(1000)
         again = await _product_reasons(variants, s)
         if again:
@@ -203,9 +216,22 @@ async def delete_package(pid: str, confirm: str = "", user=Depends(OWNER)):
     reasons = await package_blockers(p)
     if reasons:
         raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(reasons))
-    await db.packages.delete_one({"id": pid})
-    await _archive(user, "package", p)
-    await audit(user, "hapus_paket", "package", pid, before={"name": p["name"], "price": p["price"]})
+
+    async def run(s):
+        await _still_owner(user, s)
+        cur = await db.packages.find_one({"id": pid}, {"_id": 0}, session=s)
+        if not cur:
+            raise HTTPException(404, "Paket sudah tidak ada")
+        again = await package_blockers(cur, s)
+        if again:
+            raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(again))
+        await db.packages.delete_one({"id": pid}, session=s)
+        _fault("after_main_delete")
+        await _archive(user, "package", cur, session=s)
+        _fault("before_audit")
+        await audit(user, "hapus_paket", "package", pid, before={"name": cur["name"], "price": cur["price"]}, session=s)
+
+    await _in_transaction(run)
     return {"ok": True}
 
 
@@ -218,9 +244,23 @@ async def delete_user(uid: str, confirm: str = "", user=Depends(OWNER)):
     reasons = await user_blockers(u, user)
     if reasons:
         raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(reasons))
-    await db.users.delete_one({"id": uid})
-    await _archive(user, "user", u)
-    await audit(user, "hapus_pengguna", "user", uid, before={"email": u["email"], "name": u["name"], "role": u["role"]})
+
+    async def run(s):
+        await _lock("users_delete", user, s)
+        await _still_owner(user, s)
+        cur = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0}, session=s)
+        if not cur:
+            raise HTTPException(404, "Pengguna sudah tidak ada")
+        again = await user_blockers(cur, user, s)
+        if again:
+            raise HTTPException(409, "Tidak dapat dihapus: " + "; ".join(again))
+        await db.users.delete_one({"id": uid}, session=s)
+        _fault("after_main_delete")
+        await _archive(user, "user", cur, session=s)
+        _fault("before_audit")
+        await audit(user, "hapus_pengguna", "user", uid, before={"email": cur["email"], "name": cur["name"], "role": cur["role"]}, session=s)
+
+    await _in_transaction(run)
     return {"ok": True}
 
 

@@ -30,6 +30,28 @@ function TokenCard({ s, setS }) {
   );
 }
 
+function numberState(s) {
+  const d = s.admin_number, p = s.published_number;
+  if (!d && !p) return ["empty", "Belum diisi", "Tombol WhatsApp tidak tampil di website.", "bg-slate-100 text-slate-700"];
+  if (d && d === p) return ["live", "Sudah tampil di website", `Semua tombol WhatsApp di website membuka wa.me/${p}.`, "bg-emerald-50 text-emerald-800"];
+  if (d && !p) return ["draft", "Tersimpan sebagai draft", "Belum tampil di website — tombol WhatsApp masih tersembunyi sampai diterbitkan.", "bg-amber-50 text-amber-900"];
+  if (!d) return ["cleared", "Dikosongkan (draft)", `Website masih menampilkan wa.me/${p} sampai bagian Kontak diterbitkan.`, "bg-amber-50 text-amber-900"];
+  return ["changed", "Nomor baru masih draft", `Website masih memakai wa.me/${p}; nomor baru ${d} tampil setelah diterbitkan.`, "bg-amber-50 text-amber-900"];
+}
+
+function NumberStatus({ s, typed }) {
+  const [key, title, text, cls] = numberState(s);
+  return (
+    <div className={`rounded-md p-3 text-sm ${cls}`} data-testid="wa-number-status" data-state={key}>
+      <p className="font-bold" data-testid="wa-number-status-title">Status: {title}</p>
+      <p>{text}</p>
+      <p className="mt-1 text-xs" data-testid="wa-number-published">Tampil di website saat ini: <b>{s.published_number ? `+${s.published_number}` : "— (tombol WhatsApp disembunyikan)"}</b>
+        {s.published_number && <> · <a href={`https://wa.me/${s.published_number}`} target="_blank" rel="noreferrer" className="underline" data-testid="wa-number-live-link">uji tautan</a></>}</p>
+      {typed !== s.admin_number && <p className="mt-1 text-xs font-semibold" data-testid="wa-number-unsaved">Isian di atas belum disimpan.</p>}
+    </div>
+  );
+}
+
 function NumberCard({ s, setS }) {
   const [num, setNum] = useState(s.admin_number);
   const bad = num.trim() && !normalizeWa(num);
@@ -45,10 +67,10 @@ function NumberCard({ s, setS }) {
           <div className="flex flex-wrap gap-2"><Input className="max-w-xs" value={num} onChange={(e) => setNum(e.target.value)} data-testid="wa-number-input" />
             <Btn disabled={!!bad || num === s.admin_number} onClick={save} data-testid="wa-number-save">Simpan</Btn></div>
         </Field>
-        <p className="text-sm" data-testid="wa-number-published">Tampil di website saat ini: <b>{s.published_number || "— (tombol WA disembunyikan)"}</b></p>
+        <NumberStatus s={s} typed={num} />
         {s.pending_publish && (
           <div className="flex flex-wrap items-center gap-2 rounded-md bg-amber-50 p-2 text-sm text-amber-900" data-testid="wa-number-pending">
-            Nomor baru masih draft — cek di Pratinjau CMS, lalu terbitkan.
+            {s.admin_number ? "Nomor baru masih draft — cek di Pratinjau CMS, lalu terbitkan." : "Nomor sudah dikosongkan di draft — terbitkan agar tombol WhatsApp hilang dari website."}
             <Btn size="sm" onClick={publish} data-testid="wa-number-publish">Terbitkan bagian Kontak</Btn>
           </div>
         )}
