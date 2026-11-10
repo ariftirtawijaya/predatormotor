@@ -46,7 +46,7 @@ export function Layanan() {
   const groups = [["paket", "Paket"], ["layanan", "Layanan"]];
   return (
     <div className={wrap} data-testid="services-page">
-      <H2 sub="Harga paket sudah termasuk barang dan jasa pemasangan. Konsultasikan kebutuhan kendaraan Anda.">Layanan & Paket</H2>
+      <H2 sub="Harga paket sudah termasuk barang dan jasa pemasangan. Konsultasikan kebutuhan kendaraan anda.">Layanan & Paket</H2>
       {!items.length && <Empty>Daftar layanan sedang disiapkan.</Empty>}
       {groups.map(([k, label]) => {
         const list = items.filter((x) => (x.kind || "paket") === k);
