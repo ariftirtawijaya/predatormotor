@@ -21,7 +21,7 @@ SECTIONS = [
     {"type": "features", "enabled": True, "title": "Kenapa memilih kami", "items": [
         {"title": "Pemasangan rapi", "desc": "Isi deskripsi keunggulan dari CMS.", "icon": "wrench"},
         {"title": "Garansi sesuai kebijakan", "desc": "Isi ketentuan garansi dari CMS.", "icon": "shield"},
-        {"title": "Konsultasi gratis", "desc": "Tanyakan kebutuhan lampu kendaraan Anda.", "icon": "message"}]},
+        {"title": "Konsultasi gratis", "desc": "Tanyakan kebutuhan lampu kendaraan anda.", "icon": "message"}]},
     {"type": "stats", "enabled": False, "title": "", "items": []},
     {"type": "services", "enabled": True, "title": "Layanan Unggulan", "subtitle": ""},
     {"type": "packages", "enabled": True, "title": "Paket Unggulan", "subtitle": ""},

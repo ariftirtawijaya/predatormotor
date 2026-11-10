@@ -43,7 +43,7 @@ export function ImportDialog({ onClose, onDone }) {
   return (
     <Modal open onClose={onClose} title="Impor Master Barang dari Excel" wide>
       <div className="space-y-4" data-testid="import-dialog">
-        <p className="text-sm text-slate-600">Satu baris = satu varian. Baris dengan <b>kode_produk</b> sama menjadi varian dari produk yang sama; <b>nama_varian</b> kosong = produk sederhana. Stok varian yang sudah ada tidak pernah ditimpa. Impor disimpan <b>seluruhnya atau tidak sama sekali</b>, dan diperiksa ulang saat Anda menekan Simpan.</p>
+        <p className="text-sm text-slate-600">Satu baris = satu varian. Baris dengan <b>kode_produk</b> sama menjadi varian dari produk yang sama; <b>nama_varian</b> kosong = produk sederhana. Stok varian yang sudah ada tidak pernah ditimpa. Impor disimpan <b>seluruhnya atau tidak sama sekali</b>, dan diperiksa ulang saat anda menekan Simpan.</p>
         <input type="file" accept=".xlsx" onChange={(e) => { setFile(e.target.files[0]); setRes(null); }} data-testid="import-file-input" />
         <Btn v="outline" disabled={!file || busy} onClick={() => send(false)} data-testid="import-preview-button">Pratinjau</Btn>
         {err && <p className="rounded-md bg-red-50 p-2 text-sm text-red-800" data-testid="import-error">{err}</p>}

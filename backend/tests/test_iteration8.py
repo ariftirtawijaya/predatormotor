@@ -263,7 +263,7 @@ class TestDelete:
         assert requests.post(f"{B}/auth/login", json={"email": u2["email"], "password": "Rahasia-123"}).status_code == 401
         me = owner.get(f"{B}/auth/me").json()
         chk = owner.get(f"{B}/admin/delete-check/user/{me['id']}").json()
-        assert not chk["can_delete"] and any("sedang Anda pakai" in r for r in chk["reasons"])
+        assert not chk["can_delete"] and any("sedang anda pakai" in r for r in chk["reasons"])
 
 
 # ---------- 4. Produk sederhana & varian ----------

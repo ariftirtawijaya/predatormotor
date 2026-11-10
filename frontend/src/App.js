@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import PublicLayout from "@/public/PublicLayout";
@@ -9,10 +9,21 @@ import { Profil, Layanan, Katalog, Galeri, Kontak, CustomPage } from "@/public/P
 import NotaPublic from "@/public/NotaPublic";
 
 const AdminApp = lazy(() => import("@/admin/AdminApp"));
+const SITE_TITLE = "Predator Autolight Bojonegoro";
+
+// Admin & nota tidak punya judul CMS; halaman publik diatur useSeo (judul CMS tetap diutamakan).
+function DefaultTitle() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (pathname.startsWith("/admin") || pathname.startsWith("/nota/")) document.title = SITE_TITLE;
+  }, [pathname]);
+  return null;
+}
 
 function App() {
   return (
     <BrowserRouter>
+      <DefaultTitle />
       <Toaster richColors position="top-right" />
       <Routes>
         <Route path="/admin/*" element={

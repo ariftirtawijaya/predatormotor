@@ -75,7 +75,7 @@ async def item_blockers(it, session=None):
 async def user_blockers(u, me, session=None):
     reasons = []
     if u["id"] == me["id"]:
-        reasons.append("Tidak dapat menghapus akun yang sedang Anda pakai")
+        reasons.append("Tidak dapat menghapus akun yang sedang anda pakai")
     if u["role"] == "owner" and not await db.users.count_documents({"role": "owner", "active": True, "id": {"$ne": u["id"]}}, session=session):
         reasons.append("Ini akun owner terakhir")
     name, uid = u["name"], u["id"]

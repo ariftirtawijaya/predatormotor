@@ -44,7 +44,7 @@ export default function ResetData() {
         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
         <div>
           <p className="font-semibold">Tindakan permanen.</p>
-          <p>Yang tersisa hanya akun Anda (<b>{s.keep.email}</b>) dengan password yang sama. Struktur website & dashboard tetap ada, konten CMS kembali kosong, nomor WhatsApp admin dan token Fonnte dihapus. File backup tidak disentuh.</p>
+          <p>Yang tersisa hanya akun anda (<b>{s.keep.email}</b>) dengan password yang sama. Struktur website & dashboard tetap ada, konten CMS kembali kosong, nomor WhatsApp admin dan token Fonnte dihapus. File backup tidak disentuh.</p>
         </div>
       </div>
       <Card title="1. Data yang akan dihapus"><Counts s={s} />
@@ -53,7 +53,7 @@ export default function ResetData() {
         <ol className="list-decimal space-y-1 pl-5 text-sm">
           <li>Di server VPS, masuk ke folder aplikasi lalu jalankan <code className="rounded bg-slate-100 px-1">./scripts/backup.sh</code>.</li>
           <li>Pastikan file backup baru muncul di folder <code className="rounded bg-slate-100 px-1">backups/</code> (database + unggahan).</li>
-          <li>Unduh/salin file backup itu ke komputer Anda. Jika ingin kembali, pakai <code className="rounded bg-slate-100 px-1">./scripts/restore.sh</code>.</li>
+          <li>Unduh/salin file backup itu ke komputer anda. Jika ingin kembali, pakai <code className="rounded bg-slate-100 px-1">./scripts/restore.sh</code>.</li>
         </ol>
       </Card>
       <Card title="3. Konfirmasi">
